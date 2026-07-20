@@ -6,8 +6,19 @@ planilha Excel com 5 abas (`fatura`, `cliente`, `itens_fatura`, `impostos`,
 uma planilha já existente. Distribuído como executável — o usuário final **não
 precisa de Python instalado**.
 
-A lógica de extração é portada fielmente dos notebooks originais em
-[`scripts_og/`](scripts_og) (processadores Equatorial e CHESP + concatenador).
+## 📥 Download
+
+Baixe a versão mais recente na página de **[Releases](../../releases/latest)**:
+- **`FaturasDeEnergia-Setup.exe`** — instalador (recomendado; sem terminal).
+- **`FaturasDeEnergia.zip`** — versão portátil (extrair e abrir o `.exe`).
+
+Todas as versões publicadas, da mais recente à mais antiga, ficam em
+**[Releases](../../releases)**.
+
+A lógica de extração foi portada fielmente dos notebooks originais de
+prototipagem (processadores Equatorial e CHESP + concatenador). Esses notebooks
+não são versionados neste repositório por conterem dados reais de faturas
+(ver `.gitignore`).
 
 > **Retomando o projeto numa nova sessão? Comece por [CONTEXTO.md](CONTEXTO.md)** —
 > handoff completo (ambiente, estado atual, esquema, pegadinhas, pendências).
