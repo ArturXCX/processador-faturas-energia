@@ -1,0 +1,38 @@
+# Ambientes e artefatos de build
+.venv/
+dist/
+
+# build/: só os scripts-fonte são versionados; tudo gerado (PyInstaller,
+# estágios intermediários, ícone .png) fica de fora.
+build/*
+!build/build.ps1
+!build/build_tudo.ps1
+!build/build_installer.ps1
+!build/fetch_tesseract.ps1
+!build/backup.ps1
+!build/make_icon.py
+!build/faturas.spec
+!build/installer.iss
+!build/app.ico
+
+# Tesseract portátil (grande; regenerar com build/fetch_tesseract.ps1)
+tesseract/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Carimbo de atualização gerado a cada build
+src/faturas_app/resources/build_info.txt
+
+# Backups locais de código (o próprio git já versiona isso)
+backups/
+
+# Dados reais de faturas (PDFs de teste + resultados) e notebooks originais
+# com outputs salvos contendo dados financeiros reais do TJGO — nunca publicar.
+testes_exec/
+scripts_og/
+
+# Metadados do Explorer do Windows
+desktop.ini

@@ -1,0 +1,93 @@
+========================================================
+ PROCESSADOR DE FATURAS DE ENERGIA  (Equatorial / CHESP)
+========================================================
+
+O QUE É
+-------
+Aplicativo para transformar PDFs de faturas de energia em uma planilha Excel
+organizada (abas: fatura, cliente, itens_fatura, impostos, medicao).
+Funciona com faturas da EQUATORIAL e da CHESP. Não é preciso instalar nada
+(nem Python) — é só extrair a pasta e abrir o programa.
+
+
+COMO ABRIR
+----------
+1. Extraia o arquivo .zip em qualquer lugar (ex.: Área de Trabalho).
+2. Entre na pasta "FaturasDeEnergia".
+3. Dê dois cliques em  FaturasDeEnergia.exe
+
+Observação: na primeira vez o Windows pode mostrar um aviso azul
+("O Windows protegeu o computador"). Clique em "Mais informações" e depois
+em "Executar assim mesmo". Isso acontece porque o app não é assinado.
+
+
+ABA 1 — PROCESSAR FATURAS (PDF -> planilha)
+-------------------------------------------
+1. Clique em "Adicionar pasta" e escolha uma pasta que contenha PDFs.
+   Para cada pasta, selecione a FORNECEDORA correta (EQUATORIAL ou CHESP).
+   Você pode adicionar várias pastas (misturando fornecedoras).
+   - "Incluir subpastas": marque se os PDFs estiverem em subpastas.
+   - "Link do PDF": escolha como preencher a coluna de link de cada fatura:
+       • "Caminho local (sem link)": guarda o caminho do PDF no seu computador.
+       • "Link de busca no Drive": cria um link que abre o Google Drive já
+         buscando aquela fatura pelo nome (bom para planilha compartilhada).
+       • "Modelo de URL personalizado": você define o padrão do link usando
+         {arquivo} ou {arquivo_sem_ext} (ex.: ...drive...search?q={arquivo_sem_ext}).
+2. Clique em "Processar PDFs". A barra mostra o andamento; erros (se houver)
+   aparecem no log.
+3. Ajuste as colunas e abas:
+   - desmarque as abas/colunas que NÃO quer na planilha;
+   - renomeie qualquer coluna digitando um novo nome no campo de texto.
+   (Colunas que vieram 100% vazias já aparecem desmarcadas.)
+4. (Opcional) Digite o "Nome do arquivo" (padrão: faturas_energia).
+5. Clique em "Salvar planilha…" e escolha onde salvar o arquivo .xlsx.
+
+A planilha gerada inclui automaticamente uma aba "glossario", explicando o
+significado das colunas, dos valores e dos itens da fatura (termos da Equatorial).
+
+Aba "Parâmetros": você mantém uma "Tabela de equivalências de itens" (item →
+item_normalizado). Na aba "itens_fatura" da planilha, a coluna "item_normalizado"
+usa essa tabela; itens fora da tabela ficam iguais ao próprio "item". A tabela
+fica salva no aplicativo.
+
+A planilha também traz duas abas-resumo:
+  - "fatura_resumida" (primeira aba): principais campos de cada fatura.
+  - "medicao_resumida": só as linhas de "ENERGIA GERAÇÃO - KWH" da medição.
+Na aba "fatura", a coluna "id_fatura" leva o prefixo da fornecedora
+(ex.: EQUATORIAL_10001867464) e há a coluna "numero_fatura" com o número original.
+
+
+ABA 2 — ADICIONAR A UMA PLANILHA EXISTENTE
+------------------------------------------
+Use quando você JÁ tem uma planilha e quer acrescentar novas faturas a ela.
+1. "Selecionar planilha…": escolha a planilha que será complementada.
+2. Adicione as pastas com as NOVAS faturas (com a fornecedora de cada uma).
+3. (Opcional) Marque "Adicionar à planilha as colunas novas que ela não possui"
+   se quiser trazer colunas que você havia removido antes.
+4. Clique em "Processar e concatenar".
+   - Se a sua planilha tiver sido gerada por este app, ele reconhece as colunas
+     automaticamente — mesmo que você as tenha renomeado ou removido.
+   - Se a planilha veio de outro lugar (sem as informações internas do app),
+     aparece uma tela para você confirmar a quais campos cada coluna corresponde
+     (as sugestões já vêm preenchidas).
+5. Confira o resumo e clique em "Salvar planilha final…".
+
+As novas faturas entram respeitando os nomes e a ordem de colunas da sua
+planilha. Faturas que já existiam não são duplicadas. Se a sua planilha ainda
+não tiver a aba "glossario", ela é acrescentada; se já tiver, é mantida.
+
+
+FATURAS ESCANEADAS (CHESP)
+--------------------------
+Algumas faturas da CHESP são imagens (escaneadas). O app já vem com o leitor de
+texto por imagem (OCR) embutido — não é preciso instalar nada. No canto superior
+direito, o indicador deve mostrar "● OCR pronto".
+
+
+DICAS / PROBLEMAS COMUNS
+------------------------
+- "Não foi possível salvar": feche a planilha no Excel antes de salvar de novo.
+- Mantenha a pasta "FaturasDeEnergia" inteira — não mova apenas o .exe para
+  fora dela (os arquivos de apoio precisam ficar juntos).
+- Faturas com layout muito fora do padrão podem não extrair todos os campos;
+  elas aparecem no log e as demais continuam normalmente.

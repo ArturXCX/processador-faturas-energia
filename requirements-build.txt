@@ -1,0 +1,2 @@
+# Dependencias usadas apenas para empacotar o aplicativo
+pyinstaller>=6.6
