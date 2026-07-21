@@ -331,6 +331,21 @@ def _valor_confiavel(qtd, preco, valor, token_valor, tarifa=None):
     return valor
 
 
+def _tarifa_confiavel(token_tarifa, tarifa):
+    """
+    O OCR às vezes lê a tarifa unitária sem a vírgula decimal quando o
+    algarismo antes dela é '0' ('042212' em vez de '0,42212'), e a tarifa vira
+    um valor absurdo (42212 em vez de 0,42212). Tarifas de energia sempre têm
+    1 dígito antes da vírgula; reinserida logo após o 1º dígito quando o token
+    capturado não tem vírgula/ponto e começa com '0'.
+    """
+    if tarifa is None or not token_tarifa or ',' in token_tarifa or '.' in token_tarifa:
+        return tarifa
+    if re.match(r'^0\d+$', token_tarifa):
+        return tarifa / 10 ** (len(token_tarifa) - 1)
+    return tarifa
+
+
 def _extrair_itens_modelo6(texto, id_fatura):
     """
     Nota antiga "Modelo 6" (jan–mai/2022): os itens ficam na coluna DIREITA,
@@ -435,7 +450,7 @@ def extrair_itens_chesp(texto, id_fatura, id_uc=None):
         if m:
             qtd = pf(m.group(3)) if re.match(r'[\d.,]', m.group(3)) else None
             preco = pf(m.group(4))
-            tarifa = pf(m.group(7))
+            tarifa = _tarifa_confiavel(m.group(7), pf(m.group(7)))
             valor = _valor_confiavel(qtd, preco, pf(m.group(5)), m.group(5), tarifa)
             itens.append({'id_fatura': id_fatura,
                           'item':         m.group(1).strip().upper(),
@@ -459,7 +474,7 @@ def extrair_itens_chesp(texto, id_fatura, id_uc=None):
         if m:
             qtd = pf(m.group(2))
             preco = pf(m.group(3))
-            tarifa = pf(m.group(6))
+            tarifa = _tarifa_confiavel(m.group(6), pf(m.group(6)))
             valor = _valor_confiavel(qtd, preco, pf(m.group(4)), m.group(4), tarifa)
             itens.append({'id_fatura': id_fatura,
                           'item':         m.group(1).strip().upper(),

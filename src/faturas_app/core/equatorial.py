@@ -348,8 +348,8 @@ _FIN_TERM = re.compile(
     r'|RODOVIA\b|RUA\b|AVENIDA\b|AV\.|QUADRA\b|ZONA RURAL|PRA[ÇC]A\b)',
     re.IGNORECASE)
 _FIN_SKIP = re.compile(
-    r'^\s*(M[ÊE]S\s*/\s*ANO\b|MES\s*/\s*ANO\b|TIPOS DE\b|CONSUMO FATURADO'
-    r'|BENEF[ÍI]CIO TARIF[ÁA]RIO)', re.IGNORECASE)
+    r'^\s*(M[ÊE]S\s*/\s*ANO\b|MES\s*/\s*ANO\b|TIPOS DE\b|CONSUMO FATURADO)',
+    re.IGNORECASE)
 _FIN_MED = re.compile(
     r'^(ENERGIA ATIVA|ENERGIA GERA|DEMANDA|UFER|DMCR)\b.*\b'
     r'(PONTA|FORA PONTA|RESERVADO|[ÚU]NICO|INTERMEDI)', re.IGNORECASE)
@@ -476,9 +476,13 @@ def _limpar_nome_antigo(nome):
     nome = re.sub(r'\s*-\s*k(?:Wh|W|VArh|Var)\s*$', '', nome).strip()
     nome = nome.upper()
     # linha da MEDIÇÃO mesclada antes do item ("ENERGIA GERAÇÃO - KWH
-    # RESERVADO UFER FP"): remove grandeza+posto do começo do nome.
+    # RESERVADO UFER FP"): remove grandeza+posto do começo do nome. Inclui
+    # "FATOR DE POTÊNCIA ÚNICO": essa grandeza não tem colunas de leitura
+    # (linha em branco na tabela de medição), então gruda inteira no nome
+    # do item vizinho (ex.: "FATOR DE POTÊNCIA ÚNICO UFER HR" -> "UFER HR").
     nome = re.sub(
-        r'^(?:(?:ENERGIA|DEMANDA)\s[A-ZÀ-Ü ÇÃ]*-\s*KWH?|UFER(?:\s+GERA[ÇC][ÃA]O)?|DMCR)\s+'
+        r'^(?:(?:ENERGIA|DEMANDA)\s[A-ZÀ-Ü ÇÃ]*-\s*KWH?|UFER(?:\s+GERA[ÇC][ÃA]O)?|DMCR'
+        r'|FATOR DE POT[ÊE]NCIA)\s+'
         r'(?:PONTA|FORA PONTA|RESERVADO|[ÚU]NICO|INTERMEDI[ÁA]RIO)\s+',
         '', nome).strip() or nome
     canon = _CANON_POR_ASSINATURA.get(_assinatura(nome))
@@ -603,9 +607,12 @@ def extrair_itens_fatura(texto, id_fatura, id_uc=None):
                 r'([\d.,]+)%\s+(-?[\d.,]+)\s+(-?[\d.,]+)(?:\s+.*)?$', linha, re.IGNORECASE)
             if m:
                 # linha da MEDIÇÃO mesclada antes do item ("ENERGIA GERAÇÃO -
-                # KWH RESERVADO UFER FP kWh …"): remove grandeza+posto do nome.
+                # KWH RESERVADO UFER FP kWh …"): remove grandeza+posto do nome
+                # (mesmo caso de "FATOR DE POTÊNCIA ÚNICO" tratado em
+                # _limpar_nome_antigo).
                 nome_item = re.sub(
-                    r'^(?:(?:ENERGIA|DEMANDA)\s[A-ZÀ-Ü ÇÃ]*-\s*KWH?|UFER(?:\s+GERA[ÇC][ÃA]O)?|DMCR)\s+'
+                    r'^(?:(?:ENERGIA|DEMANDA)\s[A-ZÀ-Ü ÇÃ]*-\s*KWH?|UFER(?:\s+GERA[ÇC][ÃA]O)?|DMCR'
+                    r'|FATOR DE POT[ÊE]NCIA)\s+'
                     r'(?:PONTA|FORA PONTA|RESERVADO|[ÚU]NICO|INTERMEDI[ÁA]RIO)\s+',
                     '', m.group(1).strip().upper())
                 itens.append({'id_fatura': id_fatura,
@@ -647,6 +654,24 @@ def extrair_itens_fatura(texto, id_fatura, id_uc=None):
                               'valor_r$': pf(m2.group(5)), 'pis_cofins': pf(m2.group(6)),
                               'base_calc_icms_r$': None, 'aliquota_icms_r$': None,
                               'icms': None, 'tarifa_unitaria_r$': pf(m2.group(7))})
+                continue
+            # "BENEFÍCIO TARIFÁRIO BRUTO SCEE <valor>": item SEM unidade (só
+            # nome + 1 valor) que aparece no FIM do bloco FORNECIMENTO, mesmo
+            # quando existe a seção ITENS FINANCEIROS (então o fallback
+            # genérico abaixo, exclusivo de `not tem_marcador_fin`, não
+            # entraria em ação). Tem sempre uma linha irmã de sinal oposto em
+            # ITENS FINANCEIROS ("BENEFÍCIO TARIFÁRIO LÍQUIDO SCEE").
+            m_benef = re.match(
+                r'^(BENEF[ÍI]CIO TARIF[ÁA]RIO\s+.+?)\s+(-?\d[\d.]*,\d{2})\s*$',
+                linha, re.IGNORECASE)
+            if m_benef:
+                itens.append({'id_fatura': id_fatura,
+                              'item': m_benef.group(1).strip().upper(), 'tipo': 'FORNECIMENTO',
+                              'unidade': None, 'quantidade': None,
+                              'preco_unitario_com_tributos_r$': None,
+                              'valor_r$': pf(m_benef.group(2)), 'pis_cofins': None,
+                              'base_calc_icms_r$': None, 'aliquota_icms_r$': None,
+                              'icms': None, 'tarifa_unitaria_r$': None})
                 continue
             if not tem_marcador_fin:
                 # Sem a seção "ITENS FINANCEIROS", eventuais itens financeiros
