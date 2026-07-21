@@ -34,5 +34,8 @@ backups/
 testes_exec/
 scripts_og/
 
+# PDFs anexados manualmente para testar alterações localmente — nunca publicar.
+/pdfs/
+
 # Metadados do Explorer do Windows
 desktop.ini
