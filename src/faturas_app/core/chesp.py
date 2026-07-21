@@ -653,8 +653,8 @@ def processar_pdf(pdf_path):
     fid = fat['id_fatura']
     id_uc = fat.get('id_uc') or f"NULO_{fid}"
     resultado = {
-        'fatura':       fat,
-        'cliente':      cli,
+        'fatura':               fat,
+        'unidade_consumidora':  cli,
         'itens_fatura': extrair_itens_chesp(txt, fid, id_uc),
         'impostos':     extrair_impostos_chesp(txt, fid),
         'medicao':      extrair_medicao_chesp(txt, fid),

@@ -72,69 +72,97 @@ powershell -ExecutionPolicy Bypass -File build\fetch_tesseract.ps1   # monta tes
 - **OCR embutido** (Tesseract) para faturas CHESP escaneadas (~22%).
 - Coluna **`link_pdf`** (busca no Drive pelo nome do arquivo / modelo de URL).
 - **`id_fatura`** com prefixo da fornecedora (`EQUATORIAL_…`/`CHESP_…`) + **`numero_fatura`** (valor original = nome do PDF).
-- **`id_uc`** em todas as abas; ausente → **`NULO_<id_fatura>`**.
-- **`competencia`** em todas as abas exceto `cliente`.
-- **`id_uc_normalizado`** (ao lado de id_uc): por medidor, o id_uc mais recente não-`NULO_`.
+- **`id_uc`** em todas as abas; ausente → **`NULO_<id_fatura>`**. Ao lado, sempre
+  nesta ordem: **`id_uc_sem_format`**, **`id_uc_atual_medidor`** (por medidor, o
+  id_uc mais recente não-`NULO_`) e **`id_uc_atual_medidor_sem_format`**.
+- **`competencia`** em todas as abas exceto `unidade_consumidora`.
+- **`medidor`** (só em `fatura`/`fatura_resumida`): medidor (moda) da fatura.
 - **`item_normalizado`** (itens): via **Tabela de Equivalências** (aba Parâmetros, persistida).
-- **`cliente.ultima_competencia` / `ultima_fatura`** (agregados por id_uc).
-- Abas derivadas **`fatura_resumida`** (1ª) e **`medicao_resumida`** (só ENERGIA GERAÇÃO - KWH).
+- **`unidade_consumidora`** (renomeada de `cliente`): **`primeira_competencia`/
+  `ultima_competencia`** e **`primeira_fatura`/`ultima_fatura`** (agregados por
+  id_uc); **1 linha por UC** via `drop_duplicates()` ao final.
+- Abas derivadas **`fatura_resumida`** (1ª, com `valor_total_r$` e `medidor`) e
+  **`medicao_resumida`** (só ENERGIA GERAÇÃO - KWH).
 - Aba **`glossario`** automática. Dedup só de **linha 100% idêntica** para itens/medição.
 - **Nome do arquivo** configurável ao salvar; **carimbo de atualização** no cabeçalho.
 - **Backup** de código: `build\backup.ps1`.
 
 ### Pendência / decisão a confirmar
-`id_uc_normalizado` nas abas SEM coluna "Medidor" (fatura, itens_fatura, impostos):
+`id_uc_atual_medidor` nas abas SEM coluna "Medidor" (fatura, itens_fatura, impostos):
 o medidor da linha é inferido pela `id_fatura` (medidor daquela fatura na aba
-`medicao`); na `cliente`, pelo medidor da UC. Se a regra desejada for outra, ajustar
-em `core/derivados.py::_id_uc_normalizado`.
+`medicao`); na `unidade_consumidora`, pelo medidor da UC. Se a regra desejada for
+outra, ajustar em `core/derivados.py::_colunas_medidor`.
 
 ---
 
 ## 5. Esquema atual das abas (ordem e colunas exatas)
 
-Ordem de saída: `fatura_resumida → fatura → cliente → itens_fatura → impostos →
-medicao → medicao_resumida → glossario` (+ aba oculta `_faturas_meta`).
+Ordem de saída: `fatura_resumida → fatura → unidade_consumidora → itens_fatura →
+impostos → medicao → medicao_resumida → glossario` (+ aba oculta `_faturas_meta`).
+
+Em TODA aba com `id_uc`, logo após ele vêm sempre, nesta ordem:
+`id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format`
+(inseridas programaticamente — ver nota abaixo).
 
 **fatura**: id_fatura, numero_fatura, arquivo_pdf, link_pdf, fornecedor, id_uc,
-id_uc_normalizado, data_emissao, competencia, data_vencimento, valor_total_r$,
-numero_nf, serie_nf, cfop, chave_acesso_nfe, protocolo_autorizacao,
-data_hora_protocolo, classificacao_tarifaria, tipo_fornecimento, tensao_nominal_v,
-tensao_min_v, tensao_max_v, demanda_contratada_kw, demanda_geracao_contratada_kw,
+id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format, medidor,
+data_emissao, competencia, data_vencimento, valor_total_r$, numero_nf, serie_nf,
+cfop, chave_acesso_nfe, protocolo_autorizacao, data_hora_protocolo,
+classificacao_tarifaria, tipo_fornecimento, tensao_nominal_v, tensao_min_v,
+tensao_max_v, demanda_contratada_kw, demanda_geracao_contratada_kw,
 perdas_transformacao_pct, scee_geracao_ciclo, scee_saldo_kwh_total, scee_saldo_kwh_P,
 scee_saldo_kwh_FP, scee_saldo_kwh_HR, data_leitura_anterior, data_leitura_atual,
 numero_dias_leitura, data_proxima_leitura
 
-**cliente**: id_uc, id_uc_normalizado, razao_social, cnpj, cep, municipio, uf,
-ultima_competencia, ultima_fatura  *(sem competencia — é caso à parte)*
+**unidade_consumidora** (renomeada de `cliente`): id_uc, id_uc_sem_format,
+id_uc_atual_medidor, id_uc_atual_medidor_sem_format, razao_social, cnpj, cep,
+municipio, uf, primeira_competencia, ultima_competencia, primeira_fatura,
+ultima_fatura *(sem competencia — é caso à parte)*. **1 linha por UC**: a aba
+acumula 1 linha por fatura processada e leva um `drop_duplicates()` ao final
+(derivados.py) — como os dados cadastrais e os agregados primeira/ultima_* são
+iguais para todas as faturas da mesma UC, sobra 1 linha por UC.
 
-**itens_fatura**: id_fatura, id_uc, id_uc_normalizado, competencia, item,
-item_normalizado, tipo, unidade, quantidade, preco_unitario_com_tributos_r$,
-valor_r$, pis_cofins, base_calc_icms_r$, aliquota_icms_r$, icms, tarifa_unitaria_r$
+**itens_fatura**: id_fatura, id_uc, id_uc_sem_format, id_uc_atual_medidor,
+id_uc_atual_medidor_sem_format, competencia, item, item_normalizado, tipo,
+unidade, quantidade, preco_unitario_com_tributos_r$, valor_r$, pis_cofins,
+base_calc_icms_r$, aliquota_icms_r$, icms, tarifa_unitaria_r$
 
-**impostos**: id_fatura, id_uc, id_uc_normalizado, competencia, Tributo, Base (R$),
-Aliquota (%), Valor (R$)
+**impostos**: id_fatura, id_uc, id_uc_sem_format, id_uc_atual_medidor,
+id_uc_atual_medidor_sem_format, competencia, Tributo, Base (R$), Aliquota (%),
+Valor (R$)
 
-**medicao**: id_fatura, id_uc, id_uc_normalizado, competencia, Grandezas,
-Postos horarios, Leitura Anterior, Leitura Atual, Const Medidor, Consumo kWh, Medidor
+**medicao**: id_fatura, id_uc, id_uc_sem_format, id_uc_atual_medidor,
+id_uc_atual_medidor_sem_format, competencia, Grandezas, Postos horarios,
+Leitura Anterior, Leitura Atual, Const Medidor, Consumo kWh, Medidor
 
 **fatura_resumida** (derivada de fatura): id_fatura, numero_fatura, id_uc,
-id_uc_normalizado, competencia, classificacao_tarifaria, tipo_fornecimento,
+id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format, medidor,
+competencia, valor_total_r$, classificacao_tarifaria, tipo_fornecimento,
 demanda_contratada_kw, demanda_geracao_contratada_kw, scee_geracao_ciclo,
 scee_saldo_kwh_total, scee_saldo_kwh_P, scee_saldo_kwh_FP, scee_saldo_kwh_HR,
 numero_dias_leitura
 
 **medicao_resumida** (derivada de medicao, filtrada em `ENERGIA GERAÇÃO - KWH`,
-`Consumo kWh`→`energia_geracao_kwh`): id_fatura, id_uc, id_uc_normalizado,
-competencia, Grandezas, Postos horarios, Leitura Anterior, Leitura Atual,
-Const Medidor, energia_geracao_kwh, Medidor
+`Consumo kWh`→`energia_geracao_kwh`): id_fatura, id_uc, id_uc_sem_format,
+id_uc_atual_medidor, id_uc_atual_medidor_sem_format, competencia, Grandezas,
+Postos horarios, Leitura Anterior, Leitura Atual, Const Medidor,
+energia_geracao_kwh, Medidor
 
-> Tudo é definido em `core/schema.py`. `id_uc_normalizado` (após id_uc) e
-> `item_normalizado` (após item) são inseridos **programaticamente** ao importar o
-> módulo — não os procure "escritos à mão" nas listas.
+> Tudo é definido em `core/schema.py`. O bloco `id_uc_sem_format /
+> id_uc_atual_medidor / id_uc_atual_medidor_sem_format` (após id_uc) e
+> `item_normalizado` (após item) são inseridos **programaticamente** ao importar
+> o módulo — não os procure "escritos à mão" nas listas. `medidor` (fatura/
+> fatura_resumida) e as colunas `primeira_*`/`ultima_*` (unidade_consumidora)
+> SÃO escritas à mão no schema, mas só recebem valor via `derivados.py` — por
+> isso `derivados._reordenar_canonico` reordena tudo para a ordem do schema
+> depois de calculado (senão colunas novas caem sempre no final do DataFrame).
 >
-> Dedup na concatenação: `DEDUP_KEYS` (fatura=id_fatura, cliente=id_uc,
-> impostos=[id_fatura,Tributo], fatura_resumida=id_fatura) vs `DEDUP_FULL_ROW`
-> (itens_fatura, medicao, medicao_resumida — só linha 100% idêntica).
+> Dedup na concatenação: `DEDUP_KEYS` (fatura=id_fatura,
+> unidade_consumidora=id_uc, impostos=[id_fatura,Tributo],
+> fatura_resumida=id_fatura) vs `DEDUP_FULL_ROW` (itens_fatura, medicao,
+> medicao_resumida — só linha 100% idêntica). `unidade_consumidora` leva ainda
+> um `drop_duplicates()` final (ver acima), tanto no processamento quanto na
+> concatenação.
 
 ---
 
@@ -149,8 +177,9 @@ Núcleo (`src/faturas_app/core/`, sem GUI):
 - `profile.py` — camada de exibição (renomear/incluir/excluir) + metadados (`_faturas_meta`).
 - `excel_io.py` — escrita estilizada + metadados / leitura.
 - `concat.py` — concatenação com remapeamento canônico + dedup.
-- `derivados.py` — colunas recalculadas do zero: cliente.ultima_*, id_uc_normalizado,
-  item_normalizado (`aplicar` no processamento, `aplicar_concat` na concatenação).
+- `derivados.py` — colunas recalculadas do zero: unidade_consumidora.(primeira|ultima)_*,
+  id_uc_atual_medidor(+sem_format), medidor (fatura/fatura_resumida), item_normalizado
+  (`aplicar` no processamento, `aplicar_concat` na concatenação).
 - `equivalencias.py` — tabela item→item_normalizado (JSON em %APPDATA%).
 - `links.py` — coluna link_pdf. `glossario.py` — aba glossario. `build_info.py` — carimbo.
 - `controller.py` — orquestra o processamento das pastas (progresso/cancelar).

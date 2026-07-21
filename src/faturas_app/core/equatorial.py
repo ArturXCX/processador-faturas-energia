@@ -846,10 +846,11 @@ def extrair_medicao(texto, id_fatura):
 # ──────────────────────────────────────────────────────────────────────────────
 def carimbar_id_uc_competencia(resultado, id_uc, competencia):
     """
-    Aplica id_uc e competencia a TODAS as abas (competencia exceto em 'cliente'),
-    para que todas as linhas de uma fatura tenham os mesmos valores.
+    Aplica id_uc e competencia a TODAS as abas (competencia exceto em
+    'unidade_consumidora'), para que todas as linhas de uma fatura tenham os
+    mesmos valores.
     """
-    cli = resultado.get('cliente')
+    cli = resultado.get('unidade_consumidora')
     if isinstance(cli, dict):
         cli['id_uc'] = id_uc
     fat = resultado.get('fatura')
@@ -868,8 +869,8 @@ def _montar_resultado(txt, pdf_path, numero_forcado=None):
     # id_uc final: quando ausente, usa 'NULO_<id_fatura>' (não deixa vazio).
     id_uc = fat.get('id_uc') or f"NULO_{fid}"
     resultado = {
-        'fatura':       fat,
-        'cliente':      cli,
+        'fatura':               fat,
+        'unidade_consumidora':  cli,
         'itens_fatura': extrair_itens_fatura(txt, fid, id_uc),
         'impostos':     extrair_impostos(txt, fid),
         'medicao':      extrair_medicao(txt, fid),

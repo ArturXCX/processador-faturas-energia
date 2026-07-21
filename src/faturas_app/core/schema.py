@@ -14,19 +14,19 @@ de modo que, sem nenhuma renomeação, a planilha gerada bate com as de referên
 from __future__ import annotations
 
 # Abas produzidas diretamente pelos processadores (acumuladas por PDF).
-BASE_SHEETS = ["fatura", "cliente", "itens_fatura", "impostos", "medicao"]
+BASE_SHEETS = ["fatura", "unidade_consumidora", "itens_fatura", "impostos", "medicao"]
 
 # Abas DERIVADAS (calculadas a partir das base em Dataset.to_dataframes).
 DERIVED_SHEETS = ["fatura_resumida", "medicao_resumida"]
 
 # Ordem das abas na planilha de saída (resumidas posicionadas como pedido).
-SHEET_ORDER = ["fatura_resumida", "fatura", "cliente", "itens_fatura",
+SHEET_ORDER = ["fatura_resumida", "fatura", "unidade_consumidora", "itens_fatura",
                "impostos", "medicao", "medicao_resumida"]
 
 # Cores (cabeçalho, linha alternada) — mesmas dos notebooks.
 SHEET_COLORS = {
     "fatura":       ("1F4E79", "BDD7EE"),
-    "cliente":      ("1F4E79", "BDD7EE"),
+    "unidade_consumidora": ("1F4E79", "BDD7EE"),
     "itens_fatura": ("375623", "E2EFDA"),
     "impostos":     ("7B2C2C", "FCE4D6"),
     "medicao":      ("4A235A", "E8D5F5"),
@@ -39,7 +39,8 @@ SHEET_COLORS = {
 # ordem da Equatorial; colunas exclusivas entram ao final.
 #
 # 'id_uc' e 'competencia' aparecem em TODAS as abas (competencia exceto em
-# 'cliente'); 'link_pdf' guarda o link do PDF (busca no Drive pelo nome do arquivo).
+# 'unidade_consumidora'); 'link_pdf' guarda o link do PDF (busca no Drive pelo
+# nome do arquivo).
 CANONICAL_COLUMNS = {
     "fatura": [
         "id_fatura",
@@ -48,6 +49,7 @@ CANONICAL_COLUMNS = {
         "link_pdf",
         "fornecedor",
         "id_uc",
+        "medidor",
         "data_emissao",
         "competencia",
         "data_vencimento",
@@ -76,14 +78,16 @@ CANONICAL_COLUMNS = {
         "numero_dias_leitura",
         "data_proxima_leitura",
     ],
-    "cliente": [
+    "unidade_consumidora": [
         "id_uc",
         "razao_social",
         "cnpj",
         "cep",
         "municipio",
         "uf",
+        "primeira_competencia",
         "ultima_competencia",
+        "primeira_fatura",
         "ultima_fatura",
     ],
     "itens_fatura": [
@@ -128,7 +132,9 @@ CANONICAL_COLUMNS = {
         "id_fatura",
         "numero_fatura",
         "id_uc",
+        "medidor",
         "competencia",
+        "valor_total_r$",
         "classificacao_tarifaria",
         "tipo_fornecimento",
         "demanda_contratada_kw",
@@ -158,11 +164,17 @@ CANONICAL_COLUMNS = {
 MEDICAO_RESUMIDA_GRANDEZA = "ENERGIA GERAÇÃO - KWH"
 MEDICAO_RESUMIDA_COL = "energia_geracao_kwh"
 
-# 'id_uc_normalizado' aparece SEMPRE logo após 'id_uc', em todas as abas que têm
+# 'id_uc_sem_format', 'id_uc_atual_medidor' e 'id_uc_atual_medidor_sem_format'
+# aparecem SEMPRE logo após 'id_uc', nessa ordem, em todas as abas que têm
 # id_uc. 'item_normalizado' aparece logo após 'item' na aba itens_fatura.
+_NOVAS_ID_UC = ["id_uc_sem_format", "id_uc_atual_medidor", "id_uc_atual_medidor_sem_format"]
 for _cols in CANONICAL_COLUMNS.values():
-    if "id_uc" in _cols and "id_uc_normalizado" not in _cols:
-        _cols.insert(_cols.index("id_uc") + 1, "id_uc_normalizado")
+    if "id_uc" not in _cols:
+        continue
+    _idx = _cols.index("id_uc")
+    for _i, _novo in enumerate(_NOVAS_ID_UC, start=1):
+        if _novo not in _cols:
+            _cols.insert(_idx + _i, _novo)
 _itf = CANONICAL_COLUMNS["itens_fatura"]
 if "item" in _itf and "item_normalizado" not in _itf:
     _itf.insert(_itf.index("item") + 1, "item_normalizado")
@@ -175,7 +187,9 @@ COLS_PROTEGIDAS = {
     "arquivo_pdf",
     "fornecedor",
     "id_uc",
-    "id_uc_normalizado",
+    "id_uc_sem_format",
+    "id_uc_atual_medidor",
+    "id_uc_atual_medidor_sem_format",
     "item_normalizado",
     "competencia",
     "demanda_contratada_kw",
@@ -191,10 +205,10 @@ COLS_PROTEGIDAS = {
 # Chave usada para casar a mesma fatura entre planilha antiga e novas faturas
 # (evita duplicar uma fatura já existente ao concatenar). Vale por aba.
 DEDUP_KEYS = {
-    "fatura":           ["id_fatura"],
-    "cliente":          ["id_uc"],
-    "impostos":         ["id_fatura", "Tributo"],
-    "fatura_resumida":  ["id_fatura"],
+    "fatura":               ["id_fatura"],
+    "unidade_consumidora":  ["id_uc"],
+    "impostos":             ["id_fatura", "Tributo"],
+    "fatura_resumida":      ["id_fatura"],
 }
 
 # Abas em que a deduplicação (na concatenação) considera a LINHA INTEIRA, não uma

@@ -31,16 +31,18 @@ _RES = Path(__file__).resolve().parent.parent / "resources"
 ABAS_DOC = [
     ("fatura", "Uma linha por fatura: identificação, datas, valor total, dados "
                "fiscais (NF-e), classificação tarifária e leituras."),
-    ("cliente", "Dados cadastrais da Unidade Consumidora (razão social, CNPJ, "
-                "endereço). Uma linha por UC."),
+    ("unidade_consumidora", "Dados cadastrais da Unidade Consumidora (razão "
+                            "social, CNPJ, endereço, primeira/última "
+                            "competência e fatura). Uma linha por UC."),
     ("itens_fatura", "Itens que compõem a fatura (energia, demanda, tributos, "
                      "ajustes). Várias linhas por fatura; ver categoria 'Item de fatura'."),
     ("impostos", "Tributos incidentes (PIS/PASEP, COFINS, ICMS) com base de "
                  "cálculo, alíquota e valor."),
     ("medicao", "Grandezas medidas (energia ativa, demanda, etc.) por posto "
                 "horário, com leituras e consumo."),
-    ("fatura_resumida", "Versão enxuta da aba 'fatura' (primeira aba): apenas "
-                        "identificação, classificação, demandas, SCEE e dias de leitura."),
+    ("fatura_resumida", "Versão enxuta da aba 'fatura' (primeira aba): "
+                        "identificação, medidor, valor total, classificação, "
+                        "demandas, SCEE e dias de leitura."),
     ("medicao_resumida", "Versão da aba 'medicao' filtrada só na grandeza "
                          "'ENERGIA GERAÇÃO - KWH', com 'Consumo kWh' renomeado para "
                          "'energia_geracao_kwh'."),
@@ -62,6 +64,8 @@ COLUNAS_DOC = [
                "ou modelo de URL configurado no app)."),
     ("fatura", "fornecedor", "Distribuidora de origem: EQUATORIAL ou CHESP."),
     ("fatura", "id_uc", "Código da Unidade Consumidora (UC)."),
+    ("fatura / fatura_resumida", "medidor", "Número de série do medidor da UC "
+               "nesta fatura (moda dos medidores da aba 'medicao')."),
     ("fatura", "data_emissao", "Data de emissão da fatura (formato AAAA-MM-DD)."),
     ("fatura", "competencia", "Mês de referência do consumo (formato AAAA-MM)."),
     ("fatura", "data_vencimento", "Data de vencimento da fatura (AAAA-MM-DD)."),
@@ -95,21 +99,27 @@ COLUNAS_DOC = [
     ("fatura", "data_leitura_atual", "Data da leitura atual do medidor."),
     ("fatura", "numero_dias_leitura", "Número de dias faturados entre as duas leituras."),
     ("fatura", "data_proxima_leitura", "Data prevista para a próxima leitura."),
-    # cliente
-    ("cliente", "id_uc", "Código da Unidade Consumidora (UC)."),
-    ("cliente", "razao_social", "Razão social / nome do titular da UC."),
-    ("cliente", "cnpj", "CNPJ (ou CPF) do titular."),
-    ("cliente", "cep", "CEP do endereço da UC."),
-    ("cliente", "municipio", "Município da UC."),
-    ("cliente", "uf", "Unidade da Federação (ex.: GO)."),
-    ("cliente", "ultima_competencia", "Competência (AAAA-MM) mais recente com fatura para esta UC."),
-    ("cliente", "ultima_fatura", "id_fatura da fatura mais recente desta UC (pela competência)."),
+    # unidade_consumidora
+    ("unidade_consumidora", "id_uc", "Código da Unidade Consumidora (UC)."),
+    ("unidade_consumidora", "razao_social", "Razão social / nome do titular da UC."),
+    ("unidade_consumidora", "cnpj", "CNPJ (ou CPF) do titular."),
+    ("unidade_consumidora", "cep", "CEP do endereço da UC."),
+    ("unidade_consumidora", "municipio", "Município da UC."),
+    ("unidade_consumidora", "uf", "Unidade da Federação (ex.: GO)."),
+    ("unidade_consumidora", "primeira_competencia", "Competência (AAAA-MM) mais "
+               "antiga com fatura para esta UC."),
+    ("unidade_consumidora", "ultima_competencia", "Competência (AAAA-MM) mais recente com fatura para esta UC."),
+    ("unidade_consumidora", "primeira_fatura", "id_fatura da fatura mais antiga desta UC (pela competência)."),
+    ("unidade_consumidora", "ultima_fatura", "id_fatura da fatura mais recente desta UC (pela competência)."),
     ("(todas)", "id_uc", "Aparece em todas as abas; quando a fatura não traz UC, recebe "
                "'NULO_<id_fatura>' (nunca fica vazio)."),
-    ("(todas)", "id_uc_normalizado", "Ao lado de id_uc: o id_uc mais recente (por competência) "
+    ("(todas)", "id_uc_sem_format", "Ao lado de id_uc: o mesmo valor, sem ponto ou hífen."),
+    ("(todas)", "id_uc_atual_medidor", "Ao lado de id_uc: o id_uc mais recente (por competência) "
                "e não-'NULO_' associado ao mesmo medidor. Ajuda a unificar a UC quando a "
                "leitura falhou em alguma fatura."),
-    ("(todas exceto cliente)", "competencia", "Mês de referência (AAAA-MM) da fatura da linha."),
+    ("(todas)", "id_uc_atual_medidor_sem_format", "Ao lado de id_uc_atual_medidor: o mesmo "
+               "valor, sem ponto ou hífen."),
+    ("(todas exceto unidade_consumidora)", "competencia", "Mês de referência (AAAA-MM) da fatura da linha."),
     ("itens_fatura", "item_normalizado", "Nome padronizado do item conforme a Tabela de "
                "Equivalências (aba Parâmetros); se o item não estiver na tabela, fica igual a 'item'."),
     # itens_fatura
