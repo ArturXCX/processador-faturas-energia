@@ -209,17 +209,26 @@ def extrair_fatura(texto, pdf_path, numero_forcado=None):
     if not classif:
         classif = get(r'Classifica[çc][ãa]o:\s*([^\n]+)', texto)
     tipo_forn = get(r'Tipo de [Ff]ornecimento:\s*(\S+)', texto)
+    m_cab = None
     if not classif:
         # layout antigo: cabeçalho "B B3 PODER PÚBLICO - ESTADUAL CONVENCIONAL
         # TRIFÁSICO <datas de leitura>" (grupo, subgrupo, classificação,
-        # modalidade, fases) — sem os rótulos "Classificação:"/"Tipo de".
+        # modalidade, fases) — sem os rótulos "Classificação:"/"Tipo de". O
+        # código de grupo/subgrupo (ex.: "B B3") entra junto no group(1) —
+        # sem isso, classificacao_tarifaria saía incompleta ("PODER PÚBLICO -
+        # ESTADUAL", sem o "B B3" na frente). Entre as FASES e a 1ª data pode
+        # haver o "Nº de dias" da leitura colado ANTES dela (variante rara);
+        # tolerar isso (grupo opcional, não usado aqui) evita que classif/
+        # tipo_fornecimento falhem também — sem essa tolerância, a linha
+        # inteira (inclusive campos que nada têm a ver com a leitura) ficava
+        # em branco.
         m_cab = re.search(
-            r'^[AB]\s+[AB]\d?\S*\s+(.+?)\s+\S+\s+((?:MONO|BI|TRI)F[ÁA]SICO)\s+'
-            r'\d{2}/\d{2}/\d{4}', texto, re.MULTILINE | re.IGNORECASE)
+            r'^([AB]\s+[AB]\d?\S*)\s+(.+?)\s+\S+\s+((?:MONO|BI|TRI)F[ÁA]SICO)\s+'
+            r'(?:(\d{1,3})\s+)?(\d{2}/\d{2}/\d{4})', texto, re.MULTILINE | re.IGNORECASE)
         if m_cab:
-            classif = m_cab.group(1).strip()
+            classif = f"{m_cab.group(1)} {m_cab.group(2).strip()}"
             if not tipo_forn:
-                tipo_forn = m_cab.group(2).upper()
+                tipo_forn = m_cab.group(3).upper()
     tensao_nom = get(r'Tens[ãa]o Nominal Disp:\s*(\d+)\s*V', texto)
     tensao_min = get(r'Lim Min:\s*([\d.,]+)\s*V', texto)
     tensao_max = get(r'Lim Max:\s*([\d.,]+)\s*V', texto)
@@ -235,6 +244,18 @@ def extrair_fatura(texto, pdf_path, numero_forcado=None):
     m_leit = re.search(
         r'(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})\s+(\d{1,3})\s+(\d{2}/\d{2}/\d{4})',
         texto)
+    numero_dias_leit = int(m_leit.group(3)) if m_leit else None
+    data_prox_leit = fmt_br(m_leit.group(4)) if m_leit else None
+    if not m_leit and m_cab and m_cab.group(4):
+        # Layout antigo, variante onde "Leitura anterior/atual" não aparecem
+        # na sequência padrão (2 datas + dias + data) em nenhum lugar do
+        # texto, mas "dias" e "próxima leitura" vêm colados ao fim da MESMA
+        # linha do cabeçalho (grupo/subgrupo/classificação/fases). Recupera
+        # pelo menos esses dois em vez de deixar as 4 colunas em branco;
+        # leitura anterior/atual seguem None (não há como inferi-las com
+        # segurança a partir só dessa linha).
+        numero_dias_leit = int(m_cab.group(4))
+        data_prox_leit = fmt_br(m_cab.group(5))
     return {
         'id_fatura':                     id_fatura,
         'numero_fatura':                 numero_fatura,
@@ -266,8 +287,8 @@ def extrair_fatura(texto, pdf_path, numero_forcado=None):
         'scee_saldo_kwh_HR':             scee_hr,
         'data_leitura_anterior':         fmt_br(m_leit.group(1)) if m_leit else None,
         'data_leitura_atual':            fmt_br(m_leit.group(2)) if m_leit else None,
-        'numero_dias_leitura':           int(m_leit.group(3)) if m_leit else None,
-        'data_proxima_leitura':          fmt_br(m_leit.group(4)) if m_leit else None,
+        'numero_dias_leitura':           numero_dias_leit,
+        'data_proxima_leitura':          data_prox_leit,
     }
 
 

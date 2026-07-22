@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import re
 import unicodedata
+from datetime import datetime
 
 import pdfplumber
 
@@ -194,10 +195,26 @@ def extrair_fatura_chesp(texto, pdf_path):
 
     classif = get(r'Classifica[çc][ãa]o:\s*([AB]\d[^\n]*?)(?:Tipo de|Modalidade)', texto,
                   flags=re.IGNORECASE | re.DOTALL)
+    if not classif:
+        # Modelo 6 (nota antiga, jan–mai/2022): rótulo em CAIXA ALTA
+        # "CLASSIFICAÇÃO:", sem "Tipo de"/"Modalidade" na mesma linha — o
+        # texto termina antes de um valor monetário colado ao final (mesma
+        # linha da tabela ao lado, ex.: "CLASSIFICAÇÃO: A4 - HORO-SAZONAL
+        # VERDE - Poderes Públicos 6.487,48").
+        classif = get(r'CLASSIFICA[ÇC][ÃA]O:\s*([AB]\d\s*-\s*.+?)\s+[\d.,]+\s*$',
+                      texto, flags=re.MULTILINE | re.IGNORECASE)
+    if not classif:
+        # Quando o OCR corrompe o marcador "Tipo de"/"Modalidade" que delimita
+        # o fim do texto de classificação (mas o código de grupo/subgrupo,
+        # ex. "B3", continua legível), recupera um trecho limitado em vez de
+        # deixar o campo inteiro em branco.
+        classif = get(r'Classifica[çc][ãa]o:\s*([AB]\d[^\n]{0,45})', texto, flags=re.IGNORECASE)
     if classif:
         classif = re.sub(r'\s+', ' ', classif).strip().rstrip(' o')
     else:
-        tem_demanda = bool(re.search(r'^\s*DEMANDA\s+kW\b', texto, re.MULTILINE | re.IGNORECASE))
+        # O OCR às vezes lê a unidade "kW" com um caractere solto colado
+        # ("kWw"), quebrando a fronteira de palavra \b original.
+        tem_demanda = bool(re.search(r'^\s*DEMANDA\s+kW[Ww]?\b', texto, re.MULTILINE | re.IGNORECASE))
         tem_horaria = bool(re.search(r'Hor[áa]ria\s+Verde', texto, re.IGNORECASE))
         tem_conv = bool(re.search(r'Modalidade.*?Convencional', texto, re.IGNORECASE | re.DOTALL))
         if tem_demanda or tem_horaria:
@@ -220,6 +237,31 @@ def extrair_fatura_chesp(texto, pdf_path):
     m_leit = re.search(
         r'(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})\s+(\d{1,3})\s+(\d{2}/\d{2}/\d{4})',
         texto)
+    leit_ant = fmt_br(m_leit.group(1)) if m_leit else None
+    leit_atu = fmt_br(m_leit.group(2)) if m_leit else None
+    dias_leit = int(m_leit.group(3)) if m_leit else None
+    prox_leit = fmt_br(m_leit.group(4)) if m_leit else None
+    if not m_leit:
+        # Modelo 6 (nota antiga, jan–mai/2022): as datas de leitura vêm em
+        # colunas próprias ("ANTERIOR ATUAL PRÓXIMA EMISSÃO APRESENTAÇÃO"
+        # seguida de uma linha com as 5 datas nessa ordem), não na sequência
+        # "data data dias data" das notas mais recentes. O nº de dias não vem
+        # impresso perto dali; calcula pela diferença entre anterior/atual
+        # (mesma semântica da coluna nas demais faturas).
+        m_leit_m6 = re.search(
+            r'ANTERIOR\s+ATUAL\s+PR[ÓO]XIMA\s+EMISS[ÃA]O\s+APRESENTA[ÇC][ÃA]O[^\n]*\n\s*'
+            r'(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})',
+            texto, re.IGNORECASE)
+        if m_leit_m6:
+            leit_ant = fmt_br(m_leit_m6.group(1))
+            leit_atu = fmt_br(m_leit_m6.group(2))
+            prox_leit = fmt_br(m_leit_m6.group(3))
+            try:
+                d1 = datetime.strptime(m_leit_m6.group(1), '%d/%m/%Y')
+                d2 = datetime.strptime(m_leit_m6.group(2), '%d/%m/%Y')
+                dias_leit = (d2 - d1).days
+            except ValueError:
+                dias_leit = None
 
     return {
         'id_fatura':               id_fatura,
@@ -249,10 +291,10 @@ def extrair_fatura_chesp(texto, pdf_path):
         'scee_saldo_kwh_P':        None,
         'scee_saldo_kwh_FP':       None,
         'scee_saldo_kwh_HR':       None,
-        'data_leitura_anterior':   fmt_br(m_leit.group(1)) if m_leit else None,
-        'data_leitura_atual':      fmt_br(m_leit.group(2)) if m_leit else None,
-        'numero_dias_leitura':     int(m_leit.group(3)) if m_leit else None,
-        'data_proxima_leitura':    fmt_br(m_leit.group(4)) if m_leit else None,
+        'data_leitura_anterior':   leit_ant,
+        'data_leitura_atual':      leit_atu,
+        'numero_dias_leitura':     dias_leit,
+        'data_proxima_leitura':    prox_leit,
     }
 
 
