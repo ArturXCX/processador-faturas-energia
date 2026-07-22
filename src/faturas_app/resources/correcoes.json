@@ -1,0 +1,68 @@
+{
+  "_comentario": "Correcoes pontuais de extracao, por id_fatura. NUNCA afetam outras faturas (o casamento e' escopado ao id_fatura). itens: nome de item quebrado por quebra de linha/OCR. medicao: campo vazio preenchido com valor errado.",
+  "itens": [
+    {
+      "id_fatura": "CHESP_280861",
+      "item_estranho": "DEMANDA W",
+      "item_correto": "DEMANDA"
+    },
+    {
+      "id_fatura": "CHESP_280893",
+      "item_estranho": "DEMANDA W",
+      "item_correto": "DEMANDA"
+    },
+    {
+      "id_fatura": "CHESP_280893",
+      "item_estranho": "CONSUMO REATIVO FORA DE PONTA KWH",
+      "item_correto": "CONSUMO REATIVO FORA DE PONTA"
+    },
+    {
+      "id_fatura": "CHESP_403297",
+      "item_estranho": "CONSUMO REATIVO FORA DE PONTA KWH",
+      "item_correto": "CONSUMO REATIVO FORA DE PONTA"
+    },
+    {
+      "id_fatura": "CHESP_1873270",
+      "item_estranho": "CONSUMO REATIVO FORA DE PONTA KWH",
+      "item_correto": "CONSUMO REATIVO FORA DE PONTA"
+    },
+    {
+      "id_fatura": "EQUATORIAL_2022009120086",
+      "item_estranho": "A KW DC H BAND. VERMELHA INJET. FP TE -",
+      "item_correto": "ADC BAND. VERMELHA INJET. FP TE -"
+    },
+    {
+      "id_fatura": "EQUATORIAL_2022009120086",
+      "item_estranho": "A KW DC H BAND. VERMELHA INJET. HR TE -",
+      "item_correto": "ADC BAND. VERMELHA INJET. HR TE -"
+    },
+    {
+      "id_fatura": "EQUATORIAL_2022008082728",
+      "item_estranho": "A KW DC H BAND. VERMELHA INJET. FP TE -",
+      "item_correto": "ADC BAND. VERMELHA INJET. FP TE -"
+    },
+    {
+      "id_fatura": "EQUATORIAL_2023010466908",
+      "item_estranho": "EV. FAT. A MAIOR - CRÉDITO DE CONSUMO",
+      "item_correto": "JUROS DEV. FAT. A MAIOR - CRÉDITO DE CONSUMO - 11/2022"
+    },
+    {
+      "id_fatura": "EQUATORIAL_2023010466908",
+      "item_estranho": "ATUAL. MONET. IPCA - CRÉDITO DE CONSUMO",
+      "item_correto": "ATUAL. MONET. IPCA - CRÉDITO DE CONSUMO - 11/2022"
+    }
+  ],
+  "medicao": [
+    {
+      "id_fatura": "EQUATORIAL_2022023394288",
+      "Grandezas": "ENERGIA ATIVA - KWH",
+      "Postos horarios": "ÚNICO",
+      "set": {
+        "Leitura Anterior": 0,
+        "Leitura Atual": 100,
+        "Const Medidor": 0.375,
+        "Consumo kWh": 0.0
+      }
+    }
+  ]
+}

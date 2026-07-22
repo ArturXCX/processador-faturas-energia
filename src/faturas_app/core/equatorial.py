@@ -876,6 +876,8 @@ def _montar_resultado(txt, pdf_path, numero_forcado=None):
         'medicao':      extrair_medicao(txt, fid),
     }
     carimbar_id_uc_competencia(resultado, id_uc, fat.get('competencia'))
+    from . import correcoes
+    correcoes.aplicar(resultado)
     return resultado
 
 

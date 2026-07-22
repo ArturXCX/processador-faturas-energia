@@ -27,8 +27,8 @@ from . import schema
 COLUNAS_DERIVADAS = ["primeira_competencia", "ultima_competencia",
                      "primeira_fatura", "ultima_fatura",
                      "id_uc_sem_format", "id_uc_atual_medidor",
-                     "id_uc_atual_medidor_sem_format", "medidor",
-                     "item_normalizado"]
+                     "id_uc_atual_medidor_sem_format", "id_uc_atual", "medidor",
+                     "item_normalizado", "tipo_fornecimento"]
 
 
 def aplicar(dfs: dict) -> dict:
@@ -42,6 +42,7 @@ def _calcular(dfs: dict) -> None:
     _extremos_por_uc(dfs)
     _colunas_medidor(dfs)
     _item_normalizado(dfs)
+    _tipo_fornecimento_upper(dfs)
     _reordenar_canonico(dfs)
 
 
@@ -91,8 +92,10 @@ def _colunas_medidor(dfs: dict) -> None:
     coluna Medidor; demais abas: via id_fatura; unidade_consumidora: via id_uc).
     Sem medidor conhecido, mantém o próprio id_uc.
 
-    Também grava, em TODAS as abas com id_uc: id_uc_sem_format e
-    id_uc_atual_medidor_sem_format (id_uc/id_uc_atual_medidor sem ponto/hífen).
+    Colunas gravadas ao lado de id_uc dependem da aba:
+      - 'unidade_consumidora': id_uc_sem_format, id_uc_atual_medidor e
+        id_uc_atual_medidor_sem_format (as três completas).
+      - demais abas: apenas 'id_uc_atual' (= id_uc_atual_medidor sem ponto/hífen).
     E, só em 'fatura'/'fatura_resumida': a coluna 'medidor' (moda do medidor
     daquela fatura, vinda da aba medicao).
     """
@@ -128,9 +131,13 @@ def _colunas_medidor(dfs: dict) -> None:
             medidor = df["id_uc"].map(mapa_uc_med)
         ucatual = medidor.map(lambda m: mapa_med_uc.get(str(m))
                               if (m is not None and pd.notna(m)) else None)
-        df["id_uc_atual_medidor"] = ucatual.where(ucatual.notna(), df["id_uc"])
-        df["id_uc_sem_format"] = df["id_uc"].map(_sem_formatacao)
-        df["id_uc_atual_medidor_sem_format"] = df["id_uc_atual_medidor"].map(_sem_formatacao)
+        id_uc_atual_medidor = ucatual.where(ucatual.notna(), df["id_uc"])
+        if aba == "unidade_consumidora":
+            df["id_uc_atual_medidor"] = id_uc_atual_medidor
+            df["id_uc_sem_format"] = df["id_uc"].map(_sem_formatacao)
+            df["id_uc_atual_medidor_sem_format"] = id_uc_atual_medidor.map(_sem_formatacao)
+        else:
+            df["id_uc_atual"] = id_uc_atual_medidor.map(_sem_formatacao)
 
     for aba in ("fatura", "fatura_resumida"):
         df = dfs.get(aba)
@@ -142,6 +149,16 @@ def _item_normalizado(dfs: dict) -> None:
     itf = dfs.get("itens_fatura")
     if itf is not None and not itf.empty and "item" in itf.columns:
         equivalencias.aplicar(itf, "item", "item_normalizado")
+
+
+def _tipo_fornecimento_upper(dfs: dict) -> None:
+    """tipo_fornecimento ('fatura'/'fatura_resumida'): valores não vazios em
+    maiúsculas (independe da fornecedora)."""
+    for aba in ("fatura", "fatura_resumida"):
+        df = dfs.get(aba)
+        if df is not None and not df.empty and "tipo_fornecimento" in df.columns:
+            df["tipo_fornecimento"] = df["tipo_fornecimento"].map(
+                lambda v: v.upper() if isinstance(v, str) else v)
 
 
 def _reordenar_canonico(dfs: dict) -> None:

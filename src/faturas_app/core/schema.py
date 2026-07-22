@@ -164,15 +164,20 @@ CANONICAL_COLUMNS = {
 MEDICAO_RESUMIDA_GRANDEZA = "ENERGIA GERAÇÃO - KWH"
 MEDICAO_RESUMIDA_COL = "energia_geracao_kwh"
 
-# 'id_uc_sem_format', 'id_uc_atual_medidor' e 'id_uc_atual_medidor_sem_format'
-# aparecem SEMPRE logo após 'id_uc', nessa ordem, em todas as abas que têm
-# id_uc. 'item_normalizado' aparece logo após 'item' na aba itens_fatura.
-_NOVAS_ID_UC = ["id_uc_sem_format", "id_uc_atual_medidor", "id_uc_atual_medidor_sem_format"]
-for _cols in CANONICAL_COLUMNS.values():
+# Colunas auxiliares de id_uc, inseridas logo após 'id_uc':
+#  - Na aba 'unidade_consumidora' (cadastro por UC): as três colunas completas
+#    'id_uc_sem_format', 'id_uc_atual_medidor', 'id_uc_atual_medidor_sem_format'.
+#  - Nas demais abas: apenas 'id_uc_atual' (que carrega o valor de
+#    id_uc_atual_medidor SEM formatação — o antigo 'id_uc_atual_medidor_sem_format').
+# 'item_normalizado' aparece logo após 'item' na aba itens_fatura.
+_EXTRAS_ID_UC_UC = ["id_uc_sem_format", "id_uc_atual_medidor", "id_uc_atual_medidor_sem_format"]
+_EXTRAS_ID_UC_OUTRAS = ["id_uc_atual"]
+for _aba, _cols in CANONICAL_COLUMNS.items():
     if "id_uc" not in _cols:
         continue
     _idx = _cols.index("id_uc")
-    for _i, _novo in enumerate(_NOVAS_ID_UC, start=1):
+    _extras = _EXTRAS_ID_UC_UC if _aba == "unidade_consumidora" else _EXTRAS_ID_UC_OUTRAS
+    for _i, _novo in enumerate(_extras, start=1):
         if _novo not in _cols:
             _cols.insert(_idx + _i, _novo)
 _itf = CANONICAL_COLUMNS["itens_fatura"]
@@ -190,6 +195,7 @@ COLS_PROTEGIDAS = {
     "id_uc_sem_format",
     "id_uc_atual_medidor",
     "id_uc_atual_medidor_sem_format",
+    "id_uc_atual",
     "item_normalizado",
     "competencia",
     "demanda_contratada_kw",

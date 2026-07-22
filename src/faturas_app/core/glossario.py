@@ -113,12 +113,15 @@ COLUNAS_DOC = [
     ("unidade_consumidora", "ultima_fatura", "id_fatura da fatura mais recente desta UC (pela competência)."),
     ("(todas)", "id_uc", "Aparece em todas as abas; quando a fatura não traz UC, recebe "
                "'NULO_<id_fatura>' (nunca fica vazio)."),
-    ("(todas)", "id_uc_sem_format", "Ao lado de id_uc: o mesmo valor, sem ponto ou hífen."),
-    ("(todas)", "id_uc_atual_medidor", "Ao lado de id_uc: o id_uc mais recente (por competência) "
-               "e não-'NULO_' associado ao mesmo medidor. Ajuda a unificar a UC quando a "
-               "leitura falhou em alguma fatura."),
-    ("(todas)", "id_uc_atual_medidor_sem_format", "Ao lado de id_uc_atual_medidor: o mesmo "
-               "valor, sem ponto ou hífen."),
+    ("(demais abas)", "id_uc_atual", "Ao lado de id_uc (em todas as abas EXCETO "
+               "unidade_consumidora): o id_uc mais recente (por competência) e não-'NULO_' "
+               "associado ao mesmo medidor, sem ponto ou hífen. Ajuda a unificar a UC quando "
+               "a leitura falhou em alguma fatura."),
+    ("unidade_consumidora", "id_uc_sem_format", "Ao lado de id_uc: o mesmo valor, sem ponto ou hífen."),
+    ("unidade_consumidora", "id_uc_atual_medidor", "Ao lado de id_uc: o id_uc mais recente (por "
+               "competência) e não-'NULO_' associado ao mesmo medidor."),
+    ("unidade_consumidora", "id_uc_atual_medidor_sem_format", "Ao lado de id_uc_atual_medidor: "
+               "o mesmo valor, sem ponto ou hífen."),
     ("(todas exceto unidade_consumidora)", "competencia", "Mês de referência (AAAA-MM) da fatura da linha."),
     ("itens_fatura", "item_normalizado", "Nome padronizado do item conforme a Tabela de "
                "Equivalências (aba Parâmetros); se o item não estiver na tabela, fica igual a 'item'."),

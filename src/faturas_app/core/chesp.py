@@ -548,6 +548,13 @@ def extrair_itens_chesp(texto, id_fatura, id_uc=None):
 def extrair_impostos_chesp(texto, id_fatura):
     t = re.sub(r'[\|\[\]()\{\}]', ' ', texto)
 
+    # Separador tolerante entre as colunas numéricas (Base/Alíquota/Valor): o
+    # OCR às vezes lê o '%' da coluna Alíquota como um caractere solto ('/' ou
+    # um traço/travessão) cercado de espaço, quebrando o '\s+' original — ex.:
+    # 'COFINS 1.437,22 431 — 61,95' ou '... 4,16 / 126,23'. Tolera no máximo UM
+    # desses caracteres entre os números; texto limpo (só espaço) não muda.
+    SEP = r'\s*[%/\-–—]?\s+'
+
     def _corr100(v, ref=None):
         if v is None:
             return v
@@ -555,8 +562,32 @@ def extrair_impostos_chesp(texto, id_fatura):
             return v / 100
         return v
 
-    # 'PIS\b' cobre o Modelo 6 (rótulo sem '/PASEP'); alíquota pode vir com '%'.
-    m_pis = re.search(r'(?:PIS/PASEP|PISIPASEP|PIS\b)\s*([\d.,]+)%?\s+([\d.,]+)%?\s+([\d.,]+)', t, re.IGNORECASE)
+    def _base_confiavel(base, aliq, val):
+        """
+        A Base impressa é o campo mais vulnerável ao OCR (mais dígitos; o
+        separador decimal pode se perder — '7.120,47' vira '712047', ou até
+        '712.047,00' -> '712047', inflando a Base em 100x/1000x+). O Valor
+        final tem poucos dígitos e é bem mais confiável. Quando a Base diverge
+        muito do esperado (Base×Alíquota/100 muito diferente do Valor
+        impresso), recalcula a Base a partir de Valor/Alíquota — a mesma
+        fórmula da fatura — em vez de tentar adivinhar o fator de correção.
+        Não mexe em nada quando Base já é consistente (tolerância ampla: só
+        corrige divergência de mais de 2x, nunca ruído normal de arredondamento).
+        """
+        if not base or not aliq or not val or base <= 0 or aliq <= 0 or val <= 0:
+            return base
+        esperado = base * aliq / 100
+        if esperado <= 0:
+            return base
+        razao = val / esperado
+        if razao < 0.5 or razao > 2.0:
+            return round(val * 100 / aliq, 2)
+        return base
+
+    # 'PIS\b' cobre o Modelo 6 (rótulo sem '/PASEP'); tolera 'PIS/IPASEP' (OCR
+    # insere um 'I' espúrio após a barra); alíquota pode vir com '%'.
+    m_pis = re.search(rf'(?:PIS\s*/?\s*I?PASEP|PIS\b)\s*([\d.,]+)%?{SEP}([\d.,]+)%?{SEP}([\d.,]+)',
+                       t, re.IGNORECASE)
     pis_base = pf(m_pis.group(1)) if m_pis else None
     pis_aliq = pf(m_pis.group(2)) if m_pis else None
     pis_val = pf(m_pis.group(3)) if m_pis else None
@@ -569,8 +600,9 @@ def extrair_impostos_chesp(texto, id_fatura):
             expected_val /= 100
         if expected_val > 0 and abs(pis_val / expected_val - 100) < 10:
             pis_val /= 100
+    pis_base = _base_confiavel(pis_base, pis_aliq, pis_val)
 
-    m_cof = re.search(r'COFINS\s*([\d.,]+)%?\s+([\d.,]+)%?\s+([\d.,]+)', t, re.IGNORECASE)
+    m_cof = re.search(rf'COFINS\s*([\d.,]+)%?{SEP}([\d.,]+)%?{SEP}([\d.,]+)', t, re.IGNORECASE)
     cof_base = pf(m_cof.group(1)) if m_cof else None
     cof_aliq = pf(m_cof.group(2)) if m_cof else None
     cof_val = pf(m_cof.group(3)) if m_cof else None
@@ -581,8 +613,9 @@ def extrair_impostos_chesp(texto, id_fatura):
         expected_val = cof_base * cof_aliq / 100
         if expected_val > 0 and abs(cof_val / expected_val - 100) < 10:
             cof_val /= 100
+    cof_base = _base_confiavel(cof_base, cof_aliq, cof_val)
 
-    m_icm = re.search(r'ICMS\s*([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)', t, re.IGNORECASE)
+    m_icm = re.search(rf'ICMS\s*([\d.,]+)%?{SEP}([\d.,]+)%?{SEP}([\d.,]+)', t, re.IGNORECASE)
 
     impostos = []
     if pis_base is not None:
@@ -638,6 +671,24 @@ def extrair_medicao_chesp(texto, id_fatura):
             continue
         seen.add(key)
         medicao.append(linha)
+    _padronizar_medicao_chesp(medicao)
+    return medicao
+
+
+def _padronizar_medicao_chesp(medicao):
+    """
+    Padroniza (só CHESP) 'Grandezas' e 'Postos horarios' das linhas de medição:
+      - Grandezas: MAIÚSCULAS; todo hífen fica cercado por 1 espaço de cada lado
+        (não encosta em palavra); 'ENERGIA REATIVA' vira 'ENERGIA REATIVA - KWH'.
+      - Postos horarios: MAIÚSCULAS.
+    """
+    for linha in medicao:
+        g = str(linha.get('Grandezas', '')).upper()
+        g = re.sub(r'\s*-\s*', ' - ', g).strip()
+        if g == 'ENERGIA REATIVA':
+            g = 'ENERGIA REATIVA - KWH'
+        linha['Grandezas'] = g
+        linha['Postos horarios'] = str(linha.get('Postos horarios', '')).upper()
     return medicao
 
 
@@ -660,4 +711,6 @@ def processar_pdf(pdf_path):
         'medicao':      extrair_medicao_chesp(txt, fid),
     }
     carimbar_id_uc_competencia(resultado, id_uc, fat.get('competencia'))
+    from . import correcoes
+    correcoes.aplicar(resultado)
     return resultado

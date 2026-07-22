@@ -1,5 +1,6 @@
 # Ambientes e artefatos de build
 .venv/
+.venv_test/
 dist/
 
 # build/: só os scripts-fonte são versionados; tudo gerado (PyInstaller,
@@ -36,6 +37,11 @@ scripts_og/
 
 # PDFs anexados manualmente para testar alterações localmente — nunca publicar.
 /pdfs/
+
+# Planilhas de referência/apoio e resultados de testes: contêm dados financeiros
+# reais do TJGO (mesma política de testes_exec/ e /pdfs/) — nunca publicar.
+/planilhas/
+/resultados/
 
 # Metadados do Explorer do Windows
 desktop.ini
