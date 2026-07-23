@@ -221,9 +221,13 @@ def extrair_fatura(texto, pdf_path, numero_forcado=None):
         # tolerar isso (grupo opcional, não usado aqui) evita que classif/
         # tipo_fornecimento falhem também — sem essa tolerância, a linha
         # inteira (inclusive campos que nada têm a ver com a leitura) ficava
-        # em branco.
+        # em branco. UC do grupo A OPTANTE pela tarifa de um subgrupo B traz um
+        # "OPT" entre grupo e subgrupo ("A OPT B3 PODER PÚBLICO - ESTADUAL
+        # THS_VERDE TRIFÁSICO …"); sem aceitá-lo, classificacao_tarifaria E
+        # tipo_fornecimento saíam vazios (o tipo só existe nesta linha, o
+        # layout antigo não tem o rótulo "Tipo de Fornecimento:").
         m_cab = re.search(
-            r'^([AB]\s+[AB]\d?\S*)\s+(.+?)\s+\S+\s+((?:MONO|BI|TRI)F[ÁA]SICO)\s+'
+            r'^([AB](?:\s+OPT)?\s+[AB]\d?\S*)\s+(.+?)\s+\S+\s+((?:MONO|BI|TRI)F[ÁA]SICO)\s+'
             r'(?:(\d{1,3})\s+)?(\d{2}/\d{2}/\d{4})', texto, re.MULTILINE | re.IGNORECASE)
         if m_cab:
             classif = f"{m_cab.group(1)} {m_cab.group(2).strip()}"
