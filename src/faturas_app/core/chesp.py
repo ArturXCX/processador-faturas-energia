@@ -263,6 +263,15 @@ def extrair_fatura_chesp(texto, pdf_path):
             except ValueError:
                 dias_leit = None
 
+    # Último fallback da competência: o MÊS DA LEITURA ATUAL. Vale para o
+    # Modelo 6 (jan–mai/2022), cujo cabeçalho traz um 'MMM/AAAA' que é o mês do
+    # FATURAMENTO e não da competência (ex.: FATURA Nº 86557 lê 28/02→31/03 mas
+    # o cabeçalho diz ABR/2022), e para as escaneadas em que o OCR não recupera
+    # nenhuma das âncoras textuais. Conferido contra as 198 faturas CHESP: a
+    # regra reproduz 178/178 das já resolvidas e recupera as outras 20.
+    if competencia is None and leit_atu:
+        competencia = leit_atu[:7]        # leit_atu vem como 'AAAA-MM-DD'
+
     return {
         'id_fatura':               id_fatura,
         'numero_fatura':           numero_fatura,

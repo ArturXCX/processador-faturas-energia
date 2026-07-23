@@ -814,11 +814,32 @@ def extrair_medicao(texto, id_fatura):
     # A 2ª leitura é OPCIONAL: em algumas faturas a coluna "Leitura Anterior"
     # vem vazia no PDF (ex.: DEMANDA GERAÇÃO - KW / FORA PONTA), restando só um
     # número (a Leitura Atual). Sem isso, a linha era perdida.
+    #
+    # ESPAÇO HORIZONTAL (`H`), nunca `\s`: uma linha de medição ocupa UMA linha
+    # do PDF. Com `\s+` (que casa '\n') uma linha TRUNCADA — o PDF não imprime
+    # a leitura anterior nem o consumo — completava os grupos que faltavam com
+    # os números da linha SEGUINTE, gravando o nº do medidor da linha de baixo
+    # como 'Consumo kWh'. Ex. (2024078766455.pdf):
+    #     2993839-2 ENERGIA ATIVA - KWH ÚNICO 763377 1,000000
+    #     2993839-2 ENERGIA REATIVA - KWH ÚNICO 074647 1,000000
+    # capturava Consumo kWh = 2993839. Restringindo a espaço horizontal, a
+    # linha truncada simplesmente não casa (nenhuma linha inventada).
+    H = r'[^\S\n]'
     pat_a = re.compile(
-        rf'^{GRANDEZA}\s+{POSTO}\s+(\d+)(?:\s+(\d+))?\s+([\d.,]+)\s+([\d.,]+)\s+(\d+-?\d*)',
+        rf'^{GRANDEZA}{H}+{POSTO}{H}+(\d+)(?:{H}+(\d+))?{H}+([\d.,]+){H}+([\d.,]+){H}+(\d+-?\d*)',
         re.IGNORECASE | re.MULTILINE)
     pat_b = re.compile(
-        rf'^(\d+-?\d*)\s+{GRANDEZA}\s+{POSTO}\s+(\d+)(?:\s+(\d+))?\s+([\d.,]+)\s+([\d.,]+)',
+        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+(\d+)(?:{H}+(\d+))?{H}+([\d.,]+){H}+([\d.,]+)',
+        re.IGNORECASE | re.MULTILINE)
+    # Linha TRUNCADA: o PDF imprime medidor, grandeza, posto, UMA leitura e a
+    # constante, e acaba — a coluna de consumo não existe naquela linha. Ex.:
+    #     10586992-9 ENERGIA ATIVA - KWH ÚNICO 80535 1,000000
+    # Registra o que a fatura realmente traz (leitura atual, constante, medidor)
+    # com 'Consumo kWh' vazio, em vez de descartar a linha inteira. O '$' torna
+    # este padrão exclusivo das linhas truncadas: uma linha completa sempre tem
+    # mais um número depois da constante e é capturada pelo pat_b.
+    pat_c = re.compile(
+        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+([\d.,]+){H}*$',
         re.IGNORECASE | re.MULTILINE)
 
     # Dedup APENAS de linhas completamente idênticas: uma mesma grandeza/posto
@@ -846,8 +867,16 @@ def extrair_medicao(texto, id_fatura):
                         'Const Medidor': const, 'Consumo kWh': consumo,
                         'Medidor': medidor})
     for m in pat_b.finditer(texto):
-        leit_ant = int(m.group(4)) if m.group(4) else None
-        leit_at = int(m.group(5)) if m.group(5) else int(m.group(4))
+        # Mesma regra do pat_a: o grupo OPCIONAL é o SEGUNDO número (group 5).
+        # Com um só número, ele é a Leitura Atual e a Anterior fica vazia —
+        # antes ambas recebiam o mesmo valor, produzindo linhas com
+        # 'Leitura Anterior == Leitura Atual' e consumo > 0.
+        if m.group(5):
+            leit_ant = int(m.group(4))
+            leit_at = int(m.group(5))
+        else:
+            leit_ant = None
+            leit_at = int(m.group(4))
         gr, po = m.group(2).upper(), m.group(3).upper()
         const, consumo, medidor = pf(m.group(6)), pf(m.group(7)), m.group(1)
         key = (gr, po, leit_ant, leit_at, const, consumo, medidor)
@@ -858,6 +887,19 @@ def extrair_medicao(texto, id_fatura):
                         'Grandezas': gr, 'Postos horarios': po,
                         'Leitura Anterior': leit_ant, 'Leitura Atual': leit_at,
                         'Const Medidor': const, 'Consumo kWh': consumo,
+                        'Medidor': medidor})
+    for m in pat_c.finditer(texto):
+        gr, po = m.group(2).upper(), m.group(3).upper()
+        medidor = m.group(1)
+        # Só entra se aquela grandeza/posto/medidor ainda não veio de uma linha
+        # completa (evita duplicar quando a fatura repete o bloco de medição).
+        if any(l['Grandezas'] == gr and l['Postos horarios'] == po
+               and l['Medidor'] == medidor for l in medicao):
+            continue
+        medicao.append({'id_fatura': id_fatura,
+                        'Grandezas': gr, 'Postos horarios': po,
+                        'Leitura Anterior': None, 'Leitura Atual': int(m.group(4)),
+                        'Const Medidor': pf(m.group(5)), 'Consumo kWh': None,
                         'Medidor': medidor})
     return medicao
 
