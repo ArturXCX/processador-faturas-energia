@@ -28,9 +28,10 @@ if os.path.exists(_ico):
     datas.append((_ico, "."))
 
 # recursos de dados do app (glossário de itens, correções pontuais de extração,
-# carimbo de atualização)
+# hardcodes padrão, carimbo de atualização)
 _resdir = os.path.join("faturas_app", "resources")
-for _r in ("glossario_itens.json", "correcoes.json", "build_info.txt"):
+for _r in ("glossario_itens.json", "correcoes.json", "hardcodes_padrao.json",
+           "build_info.txt"):
     _p = os.path.join(SRC, "faturas_app", "resources", _r)
     if os.path.exists(_p):
         datas.append((_p, _resdir))

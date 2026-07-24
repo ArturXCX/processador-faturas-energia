@@ -91,19 +91,21 @@ src/faturas_app/
 │   ├── links.py         gera coluna link_pdf (busca no Drive pelo nome / modelo)
 │   ├── derivados.py     colunas recalculadas do zero: unidade_consumidora.(primeira|ultima)_*, id_uc_atual_medidor(+sem_format), medidor, item_normalizado
 │   ├── equivalencias.py tabela item→item_normalizado persistida em %APPDATA%/FaturasEnergia
+│   ├── hardcodes.py     regras SE→ENTÃO do usuário (erro da concessionária), persistidas em %APPDATA%/FaturasEnergia
 │   ├── glossario.py     monta a aba glossario (docs + conceitos + itens do PDF)
 │   ├── build_info.py    lê o carimbo de data/hora da última atualização
 │   └── controller.py    orquestra o processamento das pastas (progresso/cancelar)
 ├── gui/                 INTERFACE (CustomTkinter)
-│   ├── app.py           janela principal (cabeçalho + 2 abas); handler global de erros
+│   ├── app.py           janela principal (cabeçalho + 4 abas); handler global de erros
 │   ├── tab_processar.py aba 1 (PDF → planilha)
 │   ├── tab_concatenar.py aba 2 (upload + novas faturas → concatena)
 │   ├── columns_editor.py editor de colunas/abas
 │   ├── tab_parametros.py aba 3: tabela de equivalências de itens (editável, persistida)
+│   ├── tab_hardcodes.py aba 4: editor visual de regras SE→ENTÃO + aplicação sobre uma planilha
 │   ├── mapping_dialog.py tela de mapeamento (quando não há metadados)
 │   ├── widgets.py       SeletorPastas, SeletorLink, PainelProgresso
 │   └── worker.py        processamento em thread + fila de eventos
-└── resources/           glossario_itens.json (301 itens), build_info.txt (carimbo)
+└── resources/           glossario_itens.json (301 itens), hardcodes_padrao.json, build_info.txt (carimbo)
 ```
 
 **Regra de ouro:** o `core/` nunca importa `gui/`. Toda a lógica de negócio é
@@ -123,10 +125,12 @@ testável sem abrir janela (ver `tests/`).
    DataFrames **canônicos** e **deriva** `fatura_resumida` e `medicao_resumida`.
 3. `links.aplicar_link` preenche `link_pdf`; `uc_map.aplicar` troca `id_uc` (se
    houver mapa).
-4. `profile.Perfil.padrao_de_dataframes` cria o perfil (nomes = canônicos;
+4. `hardcodes.aplicar_dfs` aplica, **por último**, as regras SE→ENTÃO do usuário
+   (aba 4) sobre os dados já completos.
+5. `profile.Perfil.padrao_de_dataframes` cria o perfil (nomes = canônicos;
    colunas 100% vazias já desmarcadas). O usuário edita no `columns_editor`.
-5. `glossario.garantir_glossario` acrescenta a aba glossario.
-6. `excel_io.escrever_workbook` aplica o perfil, estiliza e grava, incluindo a
+6. `glossario.garantir_glossario` acrescenta a aba glossario.
+7. `excel_io.escrever_workbook` aplica o perfil, estiliza e grava, incluindo a
    aba oculta `_faturas_meta` (mapa nome_exibido → canônico).
 
 ### Concatenar (aba 2)
@@ -136,7 +140,31 @@ testável sem abrir janela (ver `tests/`).
    ou, se ausentes, por **auto-sugestão** + tela de mapeamento (`mapping_dialog`).
 4. `concat.concatenar` traduz as novas faturas para o **layout da planilha
    enviada** (respeitando renomeações/exclusões) e empilha, com dedup.
-5. `uc_map.aplicar` (opcional) + `glossario.garantir_glossario` + salvar.
+5. `hardcodes.aplicar_dfs` (por último, sobre antigos + novos) + `uc_map.aplicar`
+   (opcional) + `glossario.garantir_glossario` + salvar.
+
+### Hardcodes (aba 4)
+
+Regras "SE → ENTÃO" **do usuário**, para consertar o que já veio errado na fatura
+emitida pela concessionária (o processador leu certo; a origem é que está errada).
+Não confundir com `correcoes.py`, que conserta erros de EXTRAÇÃO e é embutido no app.
+
+- Estrutura: grupos de condições ligados entre si por **E**; dentro de cada grupo,
+  as condições se ligam por **E** ou **OU** — expressando
+  `SE (X=1 OU X=2) E (Y≠3) ENTÃO Z=0`. Grupos, condições e ações são incrementáveis.
+- Persistidas em `%APPDATA%/FaturasEnergia/hardcodes.json`. Na primeira execução o
+  arquivo é semeado com `resources/hardcodes_padrao.json`; depois disso o arquivo do
+  usuário manda (lista vazia é respeitada, não é re-semeada).
+- Casamento **tolerante**, como em `correcoes.py`: nomes de aba/coluna e valores são
+  normalizados (maiúsculas, sem acento, espaços colapsados) e a comparação é numérica
+  quando os dois lados são números. Assim `Postos Horários` casa com `Postos horarios`
+  e `quantidade = 30` casa com `"30"` e com `30.0`.
+- Aplicados ao FINAL do processamento (abas 1 e 2) e, sob demanda, sobre uma planilha
+  já pronta (`hardcodes.aplicar_planilha` → arquivo com sufixo `_hardcodes`).
+- **Atenção:** a regra é escopada a UMA aba/coluna. Se a coluna alvo tiver derivados
+  (`item` → `item_normalizado`; `medicao.Consumo kWh` → `medicao_resumida.energia_geracao_kwh`),
+  acrescente a ação/regra correspondente — os hardcodes rodam DEPOIS de `derivados.py`
+  e não são propagados automaticamente.
 
 ---
 

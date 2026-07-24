@@ -13,7 +13,7 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from ..core import excel_io, concat, links, glossario, derivados
+from ..core import excel_io, concat, links, glossario, derivados, hardcodes
 from ..core.dataset import Dataset
 from .mapping_dialog import DialogoMapeamento, construir_sugestoes
 from .widgets import SeletorPastas, PainelProgresso, SeletorLink
@@ -194,6 +194,9 @@ class AbaConcatenar(ctk.CTkFrame):
         # Recalcula colunas derivadas do zero (antigos + novos).
         derivados.aplicar_concat(res_dfs, meta)
 
+        # Hardcodes do usuário: sempre por ÚLTIMO, sobre o conjunto já completo.
+        rel_hc = hardcodes.aplicar_dfs(res_dfs)
+
         self.resultado_dfs = res_dfs
         self.resultado_meta = meta
 
@@ -202,6 +205,8 @@ class AbaConcatenar(ctk.CTkFrame):
         if n_err:
             cab.append(f"⚠ {n_err} arquivo(s) com erro (veja o log acima).")
         cab.append("")
+        if rel_hc:
+            resumo = resumo + ["", "Hardcodes aplicados:"] + [f"  {l}" for l in rel_hc]
         texto = "\n".join(cab + resumo)
         self.progresso.progresso(1, 1, "Concluído.")
         self.txt_resumo.configure(state="normal")

@@ -14,6 +14,7 @@ from ..core import ocr, build_info
 from .tab_processar import AbaProcessar
 from .tab_concatenar import AbaConcatenar
 from .tab_parametros import AbaParametros
+from .tab_hardcodes import AbaHardcodes
 
 
 def _caminho_icone() -> str | None:
@@ -52,6 +53,7 @@ class App(ctk.CTk):
         tabview.add("Processar faturas")
         tabview.add("Adicionar a uma planilha")
         tabview.add("Parâmetros")
+        tabview.add("Hardcodes")
 
         proc = AbaProcessar(tabview.tab("Processar faturas"))
         proc.pack(fill="both", expand=True, padx=4, pady=4)
@@ -59,6 +61,8 @@ class App(ctk.CTk):
         conc.pack(fill="both", expand=True, padx=4, pady=4)
         param = AbaParametros(tabview.tab("Parâmetros"))
         param.pack(fill="both", expand=True, padx=4, pady=4)
+        hard = AbaHardcodes(tabview.tab("Hardcodes"))
+        hard.pack(fill="both", expand=True, padx=4, pady=4)
 
     def _erro_inesperado(self, exc, val, tb):
         detalhe = "".join(traceback.format_exception(exc, val, tb))

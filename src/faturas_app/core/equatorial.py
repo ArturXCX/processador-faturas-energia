@@ -929,6 +929,46 @@ def carimbar_id_uc_competencia(resultado, id_uc, competencia):
             row['competencia'] = competencia
 
 
+def _distribuir_tributos_layout_antigo(resultado, id_fatura):
+    """
+    No layout ANTIGO/descritivo (poucas faturas 2022) os itens de fornecimento
+    saem com só 4 colunas ("CONSUMO - kWh 470,00 0,650560 305,76"): a fatura NÃO
+    imprime o PIS/COFINS por item — só o total no quadro de tributos. Diferente
+    do "Modelo 6" da CHESP, aqui o tributo já está EMBUTIDO no preço dos itens
+    (valor_total = soma dos itens), então NÃO se acrescenta uma linha (isso
+    inflaria o total); em vez disso o PIS+COFINS é distribuído na coluna
+    `pis_cofins` dos itens de fornecimento, proporcional ao valor de cada um —
+    que é exatamente como a alíquota (uniforme) incide sobre a base. O resto de
+    arredondamento fica no item de maior valor. Só dispara quando a fatura tem
+    fornecimento mas NENHUM tributo por item (layout moderno já vem itemizado).
+    """
+    itens = resultado.get('itens_fatura') or []
+    forn = [it for it in itens
+            if it.get('tipo') == 'FORNECIMENTO' and (it.get('valor_r$') or 0) > 0]
+    soma_tributo_itens = sum((it.get('pis_cofins') or 0) + (it.get('icms') or 0)
+                             for it in itens)
+    if not forn or abs(soma_tributo_itens) > 0.005:
+        return
+    pis_cofins = round(sum((imp.get('Valor (R$)') or 0)
+                           for imp in resultado.get('impostos', [])
+                           if str(imp.get('Tributo') or '').upper()
+                           in ('PIS/PASEP', 'COFINS')), 2)
+    if pis_cofins <= 0.005:
+        return
+    base = sum(it['valor_r$'] for it in forn)
+    if base <= 0:
+        return
+    acum = 0.0
+    maior = max(forn, key=lambda it: it['valor_r$'])
+    for it in forn:
+        if it is maior:
+            continue
+        p = round(pis_cofins * it['valor_r$'] / base, 2)
+        it['pis_cofins'] = p
+        acum += p
+    maior['pis_cofins'] = round(pis_cofins - acum, 2)
+
+
 def _montar_resultado(txt, pdf_path, numero_forcado=None):
     fat = extrair_fatura(txt, pdf_path, numero_forcado)
     cli = extrair_cliente(txt)
@@ -942,6 +982,7 @@ def _montar_resultado(txt, pdf_path, numero_forcado=None):
         'impostos':     extrair_impostos(txt, fid),
         'medicao':      extrair_medicao(txt, fid),
     }
+    _distribuir_tributos_layout_antigo(resultado, fid)
     carimbar_id_uc_competencia(resultado, id_uc, fat.get('competencia'))
     from . import correcoes
     correcoes.aplicar(resultado)

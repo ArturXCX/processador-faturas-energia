@@ -13,7 +13,7 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from ..core import excel_io, links, glossario, derivados
+from ..core import excel_io, links, glossario, derivados, hardcodes
 from ..core.dataset import Dataset
 from ..core.profile import Perfil
 from .columns_editor import EditorColunas
@@ -147,6 +147,9 @@ class AbaProcessar(ctk.CTkFrame):
         # Colunas derivadas (ex.: cliente.ultima_competencia/ultima_fatura).
         derivados.aplicar(self.dfs_canon)
 
+        # Hardcodes do usuário: sempre por ÚLTIMO, sobre os dados já completos.
+        rel_hc = hardcodes.aplicar_dfs(self.dfs_canon)
+
         self.perfil = Perfil.padrao_de_dataframes(self.dfs_canon)
 
         n_fat = ds.total_faturas()
@@ -157,6 +160,10 @@ class AbaProcessar(ctk.CTkFrame):
         if resultado.cancelado:
             status = "⏹ Processamento cancelado.  " + status
         self.progresso.progresso(resultado.processados, max(resultado.total, 1), status)
+        if rel_hc:
+            self.progresso.escrever("Hardcodes aplicados:")
+            for linha in rel_hc:
+                self.progresso.escrever(f"  {linha}")
 
         # mostra editor + habilita salvar
         self.lbl_editor.grid(row=4, column=0, sticky="w", pady=(12, 4))

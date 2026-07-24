@@ -1,0 +1,83 @@
+[
+ {
+  "id": "hc_consumo_kwh_para_consumo",
+  "nome": "CONSUMO KWH com quantidade atípica vira CONSUMO",
+  "aba": "itens_fatura",
+  "ativo": true,
+  "grupos": [
+   {
+    "operador": "E",
+    "condicoes": [
+     {"coluna": "item", "operador": "igual", "valor": "CONSUMO KWH"}
+    ]
+   },
+   {
+    "operador": "E",
+    "condicoes": [
+     {"coluna": "quantidade", "operador": "nao_esta_em", "valor": "30;50;100"}
+    ]
+   }
+  ],
+  "acoes": [
+   {"coluna": "item", "valor": "CONSUMO"},
+   {"coluna": "item_normalizado", "valor": "CONSUMO"}
+  ]
+ },
+ {
+  "id": "hc_2022048615137_valor_min_faturavel",
+  "nome": "EQUATORIAL_2022048615137: VALOR MIN. FATURÁVEL CUSTO DISP vira CONSUMO FP",
+  "aba": "itens_fatura",
+  "ativo": true,
+  "grupos": [
+   {
+    "operador": "E",
+    "condicoes": [
+     {"coluna": "id_fatura", "operador": "igual", "valor": "EQUATORIAL_2022048615137"},
+     {"coluna": "item", "operador": "igual", "valor": "VALOR MIN. FATURÁVEL CUSTO DISP"}
+    ]
+   }
+  ],
+  "acoes": [
+   {"coluna": "item", "valor": "CONSUMO FP"},
+   {"coluna": "item_normalizado", "valor": "CONSUMO FP"}
+  ]
+ },
+ {
+  "id": "hc_2025121886771_geracao_fp_zero",
+  "nome": "EQUATORIAL_2025121886771: energia de geração fora ponta zerada",
+  "aba": "medicao",
+  "ativo": true,
+  "grupos": [
+   {
+    "operador": "E",
+    "condicoes": [
+     {"coluna": "id_fatura", "operador": "igual", "valor": "EQUATORIAL_2025121886771"},
+     {"coluna": "Grandezas", "operador": "igual", "valor": "ENERGIA GERAÇÃO - KWH"},
+     {"coluna": "Postos horarios", "operador": "igual", "valor": "FORA PONTA"}
+    ]
+   }
+  ],
+  "acoes": [
+   {"coluna": "Consumo kWh", "valor": "0"}
+  ]
+ },
+ {
+  "id": "hc_2025121886771_geracao_fp_zero_resumida",
+  "nome": "EQUATORIAL_2025121886771: energia de geração fora ponta zerada (medicao_resumida)",
+  "aba": "medicao_resumida",
+  "ativo": true,
+  "grupos": [
+   {
+    "operador": "E",
+    "condicoes": [
+     {"coluna": "id_fatura", "operador": "igual", "valor": "EQUATORIAL_2025121886771"},
+     {"coluna": "Grandezas", "operador": "igual", "valor": "ENERGIA GERAÇÃO - KWH"},
+     {"coluna": "Postos horarios", "operador": "igual", "valor": "FORA PONTA"}
+    ]
+   }
+  ],
+  "acoes": [
+   {"coluna": "energia_geracao_kwh", "valor": "0"}
+  ]
+ }
+]

@@ -397,6 +397,23 @@ def _tarifa_confiavel(token_tarifa, tarifa):
     return tarifa
 
 
+def _pis_cofins_confiavel(token, valor, valor_item):
+    """
+    O OCR às vezes perde a vírgula decimal do PIS/COFINS do item ('182,45' vira
+    '18245'). O PIS+COFINS embutido num item é sempre uma fração pequena do
+    próprio valor do item; quando o token vem SEM vírgula/ponto e o número
+    supera o valor do item, reinsere a vírgula (÷100) — mas só se o resultado
+    couber dentro do valor do item, para não mascarar um erro de outra natureza.
+    """
+    if valor is None or valor_item is None:
+        return valor
+    if ',' not in token and '.' not in token and abs(valor) > abs(valor_item):
+        cand = round(valor / 100, 2)
+        if abs(cand) <= abs(valor_item):
+            return cand
+    return valor
+
+
 def _extrair_itens_modelo6(texto, id_fatura):
     """
     Nota antiga "Modelo 6" (jan–mai/2022): os itens ficam na coluna DIREITA,
@@ -494,8 +511,12 @@ def extrair_itens_chesp(texto, id_fatura, id_uc=None):
         # Padrão A: item com unidade kWh / kW / kVArh (7 tokens). A unidade
         # tolera ruído de OCR ('kWwh', 'kWw'); a quantidade pode virar uma
         # letra solta no OCR ('n') — capturada como None.
+        # A unidade tolera ainda o 'k' perdido pelo OCR ('DEMANDA w …' em vez de
+        # 'DEMANDA kW …'); sem esse fallback a linha caía no Padrão E, que
+        # descarta o pis_cofins da coluna. O 'w' fica por último para não
+        # roubar o casamento de 'kWh'/'kW' quando estes estão íntegros.
         m = re.match(
-            r'^(.+?)\s+(kWwh|kWh|kwh|kWw|kW|kw|kVArh|kvarh)\s+'
+            r'^(.+?)\s+(kWwh|kWh|kwh|kWw|kW|kw|kVArh|kvarh|w)\s+'
             r'([\d.,]+|[a-zº])\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)',
             linha, re.IGNORECASE)
         if m:
@@ -510,7 +531,7 @@ def extrair_itens_chesp(texto, id_fatura, id_uc=None):
                           'quantidade':   qtd,
                           'preco_unitario_com_tributos_r$': preco,
                           'valor_r$':     valor,
-                          'pis_cofins':   pf(m.group(6)),
+                          'pis_cofins':   _pis_cofins_confiavel(m.group(6), pf(m.group(6)), valor),
                           'base_calc_icms_r$': None,
                           'aliquota_icms_r$':  None,
                           'icms':         None,
@@ -534,7 +555,7 @@ def extrair_itens_chesp(texto, id_fatura, id_uc=None):
                           'quantidade':   qtd,
                           'preco_unitario_com_tributos_r$': preco,
                           'valor_r$':     valor,
-                          'pis_cofins':   pf(m.group(5)),
+                          'pis_cofins':   _pis_cofins_confiavel(m.group(5), pf(m.group(5)), valor),
                           'base_calc_icms_r$': None,
                           'aliquota_icms_r$':  None,
                           'icms':         None,
@@ -663,6 +684,15 @@ def extrair_impostos_chesp(texto, id_fatura):
     if cof_base and cof_aliq and cof_val and cof_aliq > 0:
         expected_val = cof_base * cof_aliq / 100
         if expected_val > 0 and abs(cof_val / expected_val - 100) < 10:
+            cof_val /= 100
+    # Fallback quando a Base do COFINS também veio corrompida (o teste acima
+    # depende dela): PIS e COFINS partilham a MESMA base, logo o Valor do COFINS
+    # deve estar para o do PIS na razão das alíquotas. Como o PIS já foi
+    # saneado acima, use-o de âncora para recuperar a vírgula perdida do COFINS
+    # ('5761' -> '57,61'). Só dispara na janela estreita de ~100x.
+    if pis_val and cof_val and pis_aliq and cof_aliq and pis_aliq > 0:
+        esperado_cof = pis_val * cof_aliq / pis_aliq
+        if esperado_cof > 0 and abs(cof_val / esperado_cof - 100) < 15:
             cof_val /= 100
     cof_base = _base_confiavel(cof_base, cof_aliq, cof_val)
 
