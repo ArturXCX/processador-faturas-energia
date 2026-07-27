@@ -52,17 +52,5 @@
       "item_correto": "ATUAL. MONET. IPCA - CRÉDITO DE CONSUMO - 11/2022"
     }
   ],
-  "medicao": [
-    {
-      "id_fatura": "EQUATORIAL_2022023394288",
-      "Grandezas": "ENERGIA ATIVA - KWH",
-      "Postos horarios": "ÚNICO",
-      "set": {
-        "Leitura Anterior": 0,
-        "Leitura Atual": 100,
-        "Const Medidor": 0.375,
-        "Consumo kWh": 0.0
-      }
-    }
-  ]
+  "medicao": []
 }

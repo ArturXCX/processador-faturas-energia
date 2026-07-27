@@ -17,6 +17,7 @@ from ..core import excel_io, links, glossario, derivados, hardcodes
 from ..core.dataset import Dataset
 from ..core.profile import Perfil
 from .columns_editor import EditorColunas
+from .dialog_erros import DialogoErros
 from .widgets import SeletorPastas, PainelProgresso, SeletorLink
 from .worker import ProcessWorker
 
@@ -35,7 +36,14 @@ class AbaProcessar(ctk.CTkFrame):
         self.rodape.grid_columnconfigure(0, weight=1)
         self.lbl_resumo = ctk.CTkLabel(self.rodape, text="", anchor="w",
                                        text_color=("gray35", "gray70"))
-        self.lbl_resumo.grid(row=0, column=0, columnspan=2, sticky="w")
+        self.lbl_resumo.grid(row=0, column=0, sticky="w")
+        self.btn_erros = ctk.CTkButton(self.rodape, text="⚠  Ver arquivos ignorados",
+                                       width=200, height=26, fg_color="transparent",
+                                       border_width=1, text_color=("#9a6700", "#d29922"),
+                                       border_color=("#9a6700", "#d29922"),
+                                       command=self._ver_erros)
+        self.btn_erros.grid(row=0, column=1, sticky="e")
+        self.btn_erros.grid_remove()
 
         nome_frame = ctk.CTkFrame(self.rodape, fg_color="transparent")
         nome_frame.grid(row=1, column=0, sticky="w", pady=(4, 0))
@@ -104,6 +112,7 @@ class AbaProcessar(ctk.CTkFrame):
         self.btn_processar.configure(state="disabled")
         self.btn_salvar.configure(state="disabled")
         self._erros = []
+        self.btn_erros.grid_remove()
 
         self.worker = ProcessWorker(jobs)
         self.worker.iniciar()
@@ -157,6 +166,10 @@ class AbaProcessar(ctk.CTkFrame):
         status = f"✅ Concluído: {n_fat} fatura(s) processada(s)."
         if n_err:
             status += f"  ⚠ {n_err} arquivo(s) com erro (veja o log)."
+            self.btn_erros.configure(text=f"⚠  Ver arquivos ignorados ({n_err})")
+            self.btn_erros.grid()
+        else:
+            self.btn_erros.grid_remove()
         if resultado.cancelado:
             status = "⏹ Processamento cancelado.  " + status
         self.progresso.progresso(resultado.processados, max(resultado.total, 1), status)
@@ -172,6 +185,9 @@ class AbaProcessar(ctk.CTkFrame):
         self.editor.carregar(self.perfil)
         self.lbl_resumo.configure(text=status)
         self.btn_salvar.configure(state="normal")
+
+    def _ver_erros(self):
+        DialogoErros(self, self._erros)
 
     def _nome_arquivo(self) -> str:
         nome = (self.entry_nome.get() or "").strip() or "faturas_energia"

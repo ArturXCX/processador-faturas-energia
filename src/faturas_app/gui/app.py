@@ -15,6 +15,7 @@ from .tab_processar import AbaProcessar
 from .tab_concatenar import AbaConcatenar
 from .tab_parametros import AbaParametros
 from .tab_hardcodes import AbaHardcodes
+from .tab_borderos import AbaBorderos
 
 
 def _caminho_icone() -> str | None:
@@ -44,25 +45,54 @@ class App(ctk.CTk):
         self.report_callback_exception = self._erro_inesperado
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=1)
 
         self._cabecalho()
+        self._seletor_conjunto()
+        self._conjuntos()
 
-        tabview = ctk.CTkTabview(self)
-        tabview.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 12))
-        tabview.add("Processar faturas")
-        tabview.add("Adicionar a uma planilha")
-        tabview.add("Parâmetros")
-        tabview.add("Hardcodes")
+    def _seletor_conjunto(self):
+        seletor = ctk.CTkSegmentedButton(
+            self, values=["Faturas de energia", "Borderôs"],
+            command=self._trocar_conjunto)
+        seletor.set("Faturas de energia")
+        seletor.grid(row=1, column=0, sticky="w", padx=16, pady=(0, 8))
 
-        proc = AbaProcessar(tabview.tab("Processar faturas"))
+    def _conjuntos(self):
+        container = ctk.CTkFrame(self, fg_color="transparent")
+        container.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 12))
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(0, weight=1)
+
+        self._tab_energia = ctk.CTkTabview(container)
+        self._tab_energia.grid(row=0, column=0, sticky="nsew")
+        self._tab_energia.add("Processar faturas")
+        self._tab_energia.add("Adicionar a uma planilha")
+        self._tab_energia.add("Parâmetros")
+        self._tab_energia.add("Hardcodes")
+
+        self._tab_borderos = ctk.CTkTabview(container)
+        self._tab_borderos.grid(row=0, column=0, sticky="nsew")
+        self._tab_borderos.add("Borderôs de energia")
+
+        proc = AbaProcessar(self._tab_energia.tab("Processar faturas"))
         proc.pack(fill="both", expand=True, padx=4, pady=4)
-        conc = AbaConcatenar(tabview.tab("Adicionar a uma planilha"))
+        conc = AbaConcatenar(self._tab_energia.tab("Adicionar a uma planilha"))
         conc.pack(fill="both", expand=True, padx=4, pady=4)
-        param = AbaParametros(tabview.tab("Parâmetros"))
+        param = AbaParametros(self._tab_energia.tab("Parâmetros"))
         param.pack(fill="both", expand=True, padx=4, pady=4)
-        hard = AbaHardcodes(tabview.tab("Hardcodes"))
+        hard = AbaHardcodes(self._tab_energia.tab("Hardcodes"))
         hard.pack(fill="both", expand=True, padx=4, pady=4)
+        bord = AbaBorderos(self._tab_borderos.tab("Borderôs de energia"))
+        bord.pack(fill="both", expand=True, padx=4, pady=4)
+
+        self._tab_energia.tkraise()
+
+    def _trocar_conjunto(self, valor: str):
+        if valor == "Borderôs":
+            self._tab_borderos.tkraise()
+        else:
+            self._tab_energia.tkraise()
 
     def _erro_inesperado(self, exc, val, tb):
         detalhe = "".join(traceback.format_exception(exc, val, tb))
@@ -88,7 +118,7 @@ class App(ctk.CTk):
         titulos.grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(titulos, text=APP_NAME,
                      font=ctk.CTkFont(size=22, weight="bold")).pack(anchor="w")
-        ctk.CTkLabel(titulos, text="Equatorial · CHESP  —  PDFs de faturas → planilha Excel",
+        ctk.CTkLabel(titulos, text="Faturas (Equatorial · CHESP) e Borderôs  —  PDFs → planilha Excel",
                      text_color=("gray40", "gray65")).pack(anchor="w")
         atualizado = build_info.data_atualizacao()
         if atualizado:

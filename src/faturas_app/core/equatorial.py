@@ -829,11 +829,29 @@ def extrair_medicao(texto, id_fatura):
     # capturava Consumo kWh = 2993839. Restringindo a espaço horizontal, a
     # linha truncada simplesmente não casa (nenhuma linha inventada).
     H = r'[^\S\n]'
+    # Const Medidor sai SEMPRE com 6 casas decimais (0,048000 / 4,800000 /
+    # 1,000000 / ...; confirmado em milhares de linhas reais) — diferente de
+    # Consumo kWh, que varia (0 a 4 casas). Exigir essa assinatura aqui (em
+    # vez do genérico "[\d.,]+") é o que permite distinguir a constante de uma
+    # leitura vizinha quando a coluna de consumo falta (ver pat_d abaixo);
+    # sem ela, pat_a/pat_b aceitavam qualquer número ali, inclusive a 2ª
+    # leitura, jogando os valores certos nas colunas erradas.
+    CONST = r'(\d[\d.]*,\d{6})'
     pat_a = re.compile(
-        rf'^{GRANDEZA}{H}+{POSTO}{H}+(\d+)(?:{H}+(\d+))?{H}+([\d.,]+){H}+([\d.,]+){H}+(\d+-?\d*)',
+        rf'^{GRANDEZA}{H}+{POSTO}{H}+(\d+)(?:{H}+(\d+))?{H}+{CONST}{H}+([\d.,]+){H}+(\d+-?\d*)',
         re.IGNORECASE | re.MULTILINE)
     pat_b = re.compile(
-        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+(\d+)(?:{H}+(\d+))?{H}+([\d.,]+){H}+([\d.,]+)',
+        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+(\d+)(?:{H}+(\d+))?{H}+{CONST}{H}+([\d.,]+)',
+        re.IGNORECASE | re.MULTILINE)
+    # Linha com as DUAS leituras e a constante, mas SEM a coluna de consumo (o
+    # PDF não a imprime naquela linha). Antes da constante exigir 6 casas
+    # decimais, pat_b "resolvia" esta linha de um jeito errado: lia a leitura
+    # atual como se fosse a constante e a constante real como consumo. Caso
+    # real: 2022089485668.pdf ("1866645-1 ENERGIA ATIVA - KWH ÚNICO 485427
+    # 530341 0,375000") gravava Const Medidor = 530341 (a leitura atual) e
+    # Consumo kWh = 0,375 (a constante real).
+    pat_d = re.compile(
+        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+(\d+){H}+{CONST}{H}*$',
         re.IGNORECASE | re.MULTILINE)
     # Linha TRUNCADA: o PDF imprime medidor, grandeza, posto, UMA leitura e a
     # constante, e acaba — a coluna de consumo não existe naquela linha. Ex.:
@@ -843,7 +861,20 @@ def extrair_medicao(texto, id_fatura):
     # este padrão exclusivo das linhas truncadas: uma linha completa sempre tem
     # mais um número depois da constante e é capturada pelo pat_b.
     pat_c = re.compile(
-        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+([\d.,]+){H}*$',
+        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+{CONST}{H}*$',
+        re.IGNORECASE | re.MULTILINE)
+    # Linha SEM nenhuma leitura (faturamento por média/mínimo: não há leitura
+    # real do medidor naquele mês — só a constante, fixa, continua impressa).
+    # Caso real: 2024012783899.pdf ("10831393-0 ENERGIA ATIVA - KWH ÚNICO
+    # 1,000000").
+    pat_f = re.compile(
+        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+{CONST}{H}*$',
+        re.IGNORECASE | re.MULTILINE)
+    # Linha totalmente em branco: só medidor/grandeza/posto, sem nenhum
+    # número (nem leitura, nem constante, nem consumo). Caso real:
+    # 2022036945790.pdf ("12974430-1 ENERGIA GERAÇÃO - KWH RESERVADO").
+    pat_h = re.compile(
+        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}*$',
         re.IGNORECASE | re.MULTILINE)
 
     # Dedup APENAS de linhas completamente idênticas: uma mesma grandeza/posto
@@ -892,6 +923,19 @@ def extrair_medicao(texto, id_fatura):
                         'Leitura Anterior': leit_ant, 'Leitura Atual': leit_at,
                         'Const Medidor': const, 'Consumo kWh': consumo,
                         'Medidor': medidor})
+    for m in pat_d.finditer(texto):
+        gr, po = m.group(2).upper(), m.group(3).upper()
+        medidor = m.group(1)
+        leit_ant, leit_at, const = int(m.group(4)), int(m.group(5)), pf(m.group(6))
+        key = (gr, po, leit_ant, leit_at, const, None, medidor)
+        if key in seen:
+            continue
+        seen.add(key)
+        medicao.append({'id_fatura': id_fatura,
+                        'Grandezas': gr, 'Postos horarios': po,
+                        'Leitura Anterior': leit_ant, 'Leitura Atual': leit_at,
+                        'Const Medidor': const, 'Consumo kWh': None,
+                        'Medidor': medidor})
     for m in pat_c.finditer(texto):
         gr, po = m.group(2).upper(), m.group(3).upper()
         medidor = m.group(1)
@@ -905,6 +949,36 @@ def extrair_medicao(texto, id_fatura):
                         'Leitura Anterior': None, 'Leitura Atual': int(m.group(4)),
                         'Const Medidor': pf(m.group(5)), 'Consumo kWh': None,
                         'Medidor': medidor})
+    for m in pat_f.finditer(texto):
+        gr, po = m.group(2).upper(), m.group(3).upper()
+        medidor = m.group(1)
+        if any(l['Grandezas'] == gr and l['Postos horarios'] == po
+               and l['Medidor'] == medidor for l in medicao):
+            continue
+        medicao.append({'id_fatura': id_fatura,
+                        'Grandezas': gr, 'Postos horarios': po,
+                        'Leitura Anterior': None, 'Leitura Atual': None,
+                        'Const Medidor': pf(m.group(4)), 'Consumo kWh': None,
+                        'Medidor': medidor})
+    for m in pat_h.finditer(texto):
+        gr, po = m.group(2).upper(), m.group(3).upper()
+        medidor = m.group(1)
+        if any(l['Grandezas'] == gr and l['Postos horarios'] == po
+               and l['Medidor'] == medidor for l in medicao):
+            continue
+        medicao.append({'id_fatura': id_fatura,
+                        'Grandezas': gr, 'Postos horarios': po,
+                        'Leitura Anterior': None, 'Leitura Atual': None,
+                        'Const Medidor': None, 'Consumo kWh': None,
+                        'Medidor': medidor})
+
+    # Coluna que o PDF não imprimiu (leitura, constante ou consumo faltando)
+    # vira "0", nunca fica nula.
+    for row in medicao:
+        for campo, zero in (('Leitura Anterior', 0), ('Leitura Atual', 0),
+                            ('Const Medidor', 0.0), ('Consumo kWh', 0.0)):
+            if row[campo] is None:
+                row[campo] = zero
     return medicao
 
 
