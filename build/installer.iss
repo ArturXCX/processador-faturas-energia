@@ -4,7 +4,7 @@
 
 #define MyAppName "Processador de Faturas de Energia"
 #define MyAppShort "FaturasDeEnergia"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "2.0.0"
 #define MyAppExe "FaturasDeEnergia.exe"
 
 ; Pasta de origem (conteudo do PyInstaller). Pode ser sobrescrita pelo build via
