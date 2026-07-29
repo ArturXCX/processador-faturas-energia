@@ -57,8 +57,10 @@ class AbaProcessar(ctk.CTkFrame):
                                         height=36, command=self._salvar, state="disabled")
         self.btn_salvar.grid(row=1, column=1, sticky="e")
 
-        # ── Área principal (preenche o restante) ──────────────────────────
-        self.main = ctk.CTkFrame(self, fg_color="transparent")
+        # ── Área principal (rolável: evita que o progresso/log fiquem
+        # inacessíveis quando a janela é pequena ou o editor de colunas
+        # cresce) ───────────────────────────────────────────────────────
+        self.main = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.main.pack(side="top", fill="both", expand=True)
         self.main.grid_columnconfigure(0, weight=1)
 

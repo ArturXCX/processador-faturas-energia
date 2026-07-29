@@ -16,6 +16,7 @@ from .tab_concatenar import AbaConcatenar
 from .tab_parametros import AbaParametros
 from .tab_hardcodes import AbaHardcodes
 from .tab_borderos import AbaBorderos
+from .tab_borderos_concatenar import AbaBorderosConcatenar
 
 
 def _caminho_icone() -> str | None:
@@ -45,22 +46,37 @@ class App(ctk.CTk):
         self.report_callback_exception = self._erro_inesperado
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(1, weight=1)
 
         self._cabecalho()
-        self._seletor_conjunto()
-        self._conjuntos()
+        self._nivel_dominio()
 
-    def _seletor_conjunto(self):
+    def _nivel_dominio(self):
+        """
+        Nível de abas mais alto — hoje só "Energia Elétrica" (única opção). No
+        futuro, outros domínios (ex.: Água) entrarão aqui como novas abas
+        irmãs, cada uma com seu próprio seletor Faturas/Borderôs por baixo.
+        """
+        tabs = ctk.CTkTabview(self)
+        tabs.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 12))
+        tabs.add("Energia Elétrica")
+        aba = tabs.tab("Energia Elétrica")
+        aba.grid_columnconfigure(0, weight=1)
+        aba.grid_rowconfigure(1, weight=1)
+
+        self._seletor_conjunto(aba)
+        self._conjuntos(aba)
+
+    def _seletor_conjunto(self, master):
         seletor = ctk.CTkSegmentedButton(
-            self, values=["Faturas de energia", "Borderôs"],
+            master, values=["Faturas de Energia", "Borderôs de Energia"],
             command=self._trocar_conjunto)
-        seletor.set("Faturas de energia")
-        seletor.grid(row=1, column=0, sticky="w", padx=16, pady=(0, 8))
+        seletor.set("Faturas de Energia")
+        seletor.grid(row=0, column=0, sticky="w", pady=(8, 8))
 
-    def _conjuntos(self):
-        container = ctk.CTkFrame(self, fg_color="transparent")
-        container.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 12))
+    def _conjuntos(self, master):
+        container = ctk.CTkFrame(master, fg_color="transparent")
+        container.grid(row=1, column=0, sticky="nsew")
         container.grid_columnconfigure(0, weight=1)
         container.grid_rowconfigure(0, weight=1)
 
@@ -73,7 +89,9 @@ class App(ctk.CTk):
 
         self._tab_borderos = ctk.CTkTabview(container)
         self._tab_borderos.grid(row=0, column=0, sticky="nsew")
-        self._tab_borderos.add("Borderôs de energia")
+        self._tab_borderos.add("Processar Borderôs")
+        self._tab_borderos.add("Adicionar a uma planilha")
+        self._tab_borderos.add("Hardcodes")
 
         proc = AbaProcessar(self._tab_energia.tab("Processar faturas"))
         proc.pack(fill="both", expand=True, padx=4, pady=4)
@@ -83,13 +101,18 @@ class App(ctk.CTk):
         param.pack(fill="both", expand=True, padx=4, pady=4)
         hard = AbaHardcodes(self._tab_energia.tab("Hardcodes"))
         hard.pack(fill="both", expand=True, padx=4, pady=4)
-        bord = AbaBorderos(self._tab_borderos.tab("Borderôs de energia"))
-        bord.pack(fill="both", expand=True, padx=4, pady=4)
+
+        bproc = AbaBorderos(self._tab_borderos.tab("Processar Borderôs"))
+        bproc.pack(fill="both", expand=True, padx=4, pady=4)
+        bconc = AbaBorderosConcatenar(self._tab_borderos.tab("Adicionar a uma planilha"))
+        bconc.pack(fill="both", expand=True, padx=4, pady=4)
+        bhard = AbaHardcodes(self._tab_borderos.tab("Hardcodes"), dominio="borderos")
+        bhard.pack(fill="both", expand=True, padx=4, pady=4)
 
         self._tab_energia.tkraise()
 
     def _trocar_conjunto(self, valor: str):
-        if valor == "Borderôs":
+        if valor == "Borderôs de Energia":
             self._tab_borderos.tkraise()
         else:
             self._tab_energia.tkraise()

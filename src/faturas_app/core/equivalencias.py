@@ -11,7 +11,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
+
+# Sufixo do arquivo gerado ao aplicar a normalização sobre uma planilha enviada.
+SUFIXO_SAIDA = "_normalizado"
 
 
 def _dir() -> Path:
@@ -77,3 +81,88 @@ def aplicar(df_itens, coluna_item: str = "item", coluna_destino: str = "item_nor
     df_itens[coluna_destino] = df_itens[coluna_item].map(
         lambda v: m.get(str(v).strip().upper(), v))
     return df_itens
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Importação de equivalências a partir de uma planilha Excel ou CSV
+# ──────────────────────────────────────────────────────────────────────────────
+COLUNAS_IMPORTACAO = ("item", "item_normalizado")
+
+
+def ler_arquivo_importacao(caminho: str) -> list[dict]:
+    """
+    Lê um .xlsx/.xlsm/.csv externo e devolve as linhas {'item', 'item_normalizado'}
+    encontradas nele. O arquivo precisa ter colunas com esses dois nomes de
+    cabeçalho exatos (sem diferenciar maiúsculas/espaços nas bordas); levanta
+    ValueError, explicitando o que falta, caso contrário. Linhas com 'item'
+    vazio são ignoradas e duplicatas de 'item' dentro do próprio arquivo são
+    colapsadas (mantém a última ocorrência).
+    """
+    import pandas as pd
+
+    ext = os.path.splitext(caminho)[1].lower()
+    if ext == ".csv":
+        df = pd.read_csv(caminho, dtype=str, keep_default_na=False)
+    else:
+        df = pd.read_excel(caminho, dtype=str, engine="openpyxl")
+        df = df.fillna("")
+
+    colmap = {str(c).strip().lower(): c for c in df.columns}
+    faltantes = [n for n in COLUNAS_IMPORTACAO if n not in colmap]
+    if faltantes:
+        raise ValueError(
+            "O arquivo precisa ter as colunas " +
+            " e ".join(f"'{n}'" for n in COLUNAS_IMPORTACAO) +
+            f" — não encontrada(s): {', '.join(faltantes)}.")
+
+    linhas: dict[str, dict] = {}
+    for _, row in df.iterrows():
+        item = str(row[colmap["item"]]).strip()
+        if not item:
+            continue
+        norm = str(row[colmap["item_normalizado"]]).strip()
+        linhas[item.upper()] = {"item": item, "item_normalizado": norm}
+    return list(linhas.values())
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Aplicar a normalização sobre uma planilha já existente
+# ──────────────────────────────────────────────────────────────────────────────
+def _resolver_aba_itens(dfs: dict) -> str | None:
+    if "itens_fatura" in dfs:
+        return "itens_fatura"
+    alvo = "itensfatura"
+    for aba in dfs:
+        if re.sub(r"[\s_]+", "", str(aba)).strip().lower() == alvo:
+            return aba
+    return None
+
+
+def aplicar_planilha(caminho_entrada: str, caminho_saida: str) -> list[str]:
+    """Lê uma planilha, reaplica a normalização de itens sobre a aba
+    'itens_fatura' (coluna 'item_normalizado') e grava em `caminho_saida`."""
+    from . import excel_io
+
+    dfs, meta = excel_io.ler_workbook(caminho_entrada)
+    aba = _resolver_aba_itens(dfs)
+    if aba is None:
+        raise ValueError("A planilha não tem uma aba 'itens_fatura'.")
+    df = dfs[aba]
+    if "item" not in df.columns:
+        raise ValueError(f"A aba '{aba}' não tem a coluna 'item'.")
+    if "item_normalizado" not in df.columns:
+        raise ValueError(f"A aba '{aba}' não tem a coluna 'item_normalizado'.")
+
+    antes = df["item_normalizado"].astype(str).fillna("")
+    aplicar(df, "item", "item_normalizado")
+    depois = df["item_normalizado"].astype(str).fillna("")
+    alterados = int((antes != depois).sum())
+
+    excel_io.escrever_workbook(dfs, meta or {}, caminho_saida)
+    return [f"{aba}: {alterados} de {len(df)} linha(s) com 'item_normalizado' atualizado."]
+
+
+def caminho_saida_padrao(caminho_entrada: str) -> str:
+    """'…/x.xlsx' → '…/x_normalizado.xlsx' (mesmo nome, com o sufixo ao final)."""
+    base, ext = os.path.splitext(caminho_entrada)
+    return f"{base}{SUFIXO_SAIDA}{ext or '.xlsx'}"
