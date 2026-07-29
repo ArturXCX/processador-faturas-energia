@@ -162,15 +162,17 @@ class LinhaAcao(ctk.CTkFrame):
 class CartaoHardcode(ctk.CTkFrame):
     """Uma regra completa: cabeçalho + grupos do SE + ações do ENTÃO."""
 
-    def __init__(self, master, regra: dict, on_remover):
+    def __init__(self, master, regra: dict, on_remover, dominio: str = "faturas"):
         super().__init__(master, fg_color=("gray96", "gray17"), corner_radius=10,
                          border_width=1, border_color=("gray82", "gray28"))
         self._on_remover = on_remover
+        self._dominio = dominio
         self._id = regra.get("id", "")
         self.grupos: list[GrupoCondicoes] = []
         self.acoes: list[LinhaAcao] = []
         self.grid_columnconfigure(0, weight=1)
 
+        abas_disp = hardcodes.abas_disponiveis(self._dominio)
         # ── cabeçalho ────────────────────────────────────────────────────
         cab = ctk.CTkFrame(self, fg_color="transparent")
         cab.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 4))
@@ -182,11 +184,11 @@ class CartaoHardcode(ctk.CTkFrame):
         self.entry_nome.insert(0, regra.get("nome", ""))
         self.entry_nome.grid(row=0, column=1, sticky="ew", padx=(0, 8))
         ctk.CTkLabel(cab, text="Aba:").grid(row=0, column=2, padx=(0, 4))
-        self.menu_aba = ctk.CTkOptionMenu(cab, values=hardcodes.abas_disponiveis(),
+        self.menu_aba = ctk.CTkOptionMenu(cab, values=abas_disp,
                                           width=170, command=self._mudou_aba)
-        aba = regra.get("aba") or hardcodes.abas_disponiveis()[0]
-        if aba not in hardcodes.abas_disponiveis():
-            self.menu_aba.configure(values=hardcodes.abas_disponiveis() + [aba])
+        aba = regra.get("aba") or abas_disp[0]
+        if aba not in abas_disp:
+            self.menu_aba.configure(values=abas_disp + [aba])
         self.menu_aba.set(aba)
         self.menu_aba.grid(row=0, column=3, padx=(0, 8))
         ctk.CTkButton(cab, text="🗑 Excluir", width=88, fg_color="transparent",
@@ -231,7 +233,7 @@ class CartaoHardcode(ctk.CTkFrame):
 
     # ── colunas sugeridas conforme a aba escolhida ───────────────────────
     def _colunas(self) -> list[str]:
-        return hardcodes.colunas_da_aba(self.menu_aba.get())
+        return hardcodes.colunas_da_aba(self.menu_aba.get(), self._dominio)
 
     def _mudou_aba(self, _v=None):
         cols = self._colunas()
@@ -297,8 +299,9 @@ class CartaoHardcode(ctk.CTkFrame):
 
 
 class AbaHardcodes(ctk.CTkFrame):
-    def __init__(self, master):
+    def __init__(self, master, dominio: str = "faturas"):
         super().__init__(master, fg_color="transparent")
+        self._dominio = dominio
         self.cartoes: list[CartaoHardcode] = []
         self._fila: queue.Queue = queue.Queue()
 
@@ -341,19 +344,19 @@ class AbaHardcodes(ctk.CTkFrame):
 
     # ── carga / edição ───────────────────────────────────────────────────
     def _carregar(self):
-        regras = hardcodes.carregar()
+        regras = hardcodes.carregar(self._dominio)
         for r in regras:
             self._add_cartao(r)
         self.lbl_status.configure(text=f"{len(regras)} hardcode(s) cadastrado(s).")
 
     def _add_cartao(self, regra: dict):
-        c = CartaoHardcode(self.lista, regra, self._remover)
+        c = CartaoHardcode(self.lista, regra, self._remover, dominio=self._dominio)
         c.grid(row=len(self.cartoes), column=0, sticky="ew", padx=6, pady=6)
         self.cartoes.append(c)
         return c
 
     def _novo(self):
-        c = self._add_cartao(hardcodes.regra_vazia())
+        c = self._add_cartao(hardcodes.regra_vazia(dominio=self._dominio))
         self.after(50, lambda: self.lista._parent_canvas.yview_moveto(1.0))
         return c
 
@@ -381,7 +384,7 @@ class AbaHardcodes(ctk.CTkFrame):
                 "Estes hardcodes estão sem condição ou sem ação e não terão efeito:\n\n"
                 + "\n".join(f"• {n}" for n in incompletas))
         try:
-            hardcodes.salvar(regras)
+            hardcodes.salvar(regras, self._dominio)
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Erro", f"Não foi possível salvar os hardcodes:\n{e}")
             return
@@ -414,7 +417,7 @@ class AbaHardcodes(ctk.CTkFrame):
 
         def tarefa():
             try:
-                rel = hardcodes.aplicar_planilha(entrada, saida, regras)
+                rel = hardcodes.aplicar_planilha(entrada, saida, regras, self._dominio)
                 self._fila.put(("ok", rel))
             except Exception as e:  # noqa: BLE001
                 self._fila.put(("erro", e))

@@ -70,6 +70,32 @@ SUFIXO_SAIDA = "_hardcodes"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Domínios: "faturas" (padrão) e "borderos" têm esquemas de abas/colunas e
+# arquivos de persistência PRÓPRIOS, para que as regras de um não colidam com
+# as do outro nem apareçam nos menus errados da interface.
+# ──────────────────────────────────────────────────────────────────────────────
+def _dominio_cfg(dominio: str) -> dict:
+    if dominio == "borderos":
+        from . import borderos as _borderos
+        return {
+            "arquivo": "hardcodes_borderos.json",
+            "abas": list(_borderos.SHEET_ORDER),
+            "colunas": {
+                _borderos.ABA_BORDEROS: _borderos.BORDERO_COLS,
+                _borderos.ABA_UNIDADES: _borderos.UNIDADE_COLS,
+                _borderos.ABA_RESUMO: _borderos.RESUMO_COLS,
+            },
+            "aba_padrao": _borderos.ABA_UNIDADES,
+        }
+    return {
+        "arquivo": "hardcodes.json",
+        "abas": list(schema.SHEET_ORDER),
+        "colunas": {aba: schema.all_canonical(aba) for aba in schema.SHEET_ORDER},
+        "aba_padrao": "itens_fatura",
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Normalização / comparação tolerante
 # ──────────────────────────────────────────────────────────────────────────────
 def _vazio(v) -> bool:
@@ -226,12 +252,13 @@ def _atribuir(df: pd.DataFrame, mask: pd.Series, col: str, valor) -> None:
     df.loc[mask, col] = valor
 
 
-def aplicar_dfs(dfs: dict, regras: list[dict] | None = None) -> list[str]:
+def aplicar_dfs(dfs: dict, regras: list[dict] | None = None,
+                dominio: str = "faturas") -> list[str]:
     """
     Aplica os hardcodes (in place) a um conjunto de abas {nome: DataFrame} e
     devolve um relatório legível, uma linha por regra.
     """
-    regras = carregar() if regras is None else regras
+    regras = carregar(dominio) if regras is None else regras
     relatorio: list[str] = []
     for regra in regras:
         if not regra.get("ativo", True):
@@ -267,11 +294,18 @@ def aplicar_dfs(dfs: dict, regras: list[dict] | None = None) -> list[str]:
 
 
 def aplicar_planilha(caminho_entrada: str, caminho_saida: str,
-                     regras: list[dict] | None = None) -> list[str]:
+                     regras: list[dict] | None = None,
+                     dominio: str = "faturas") -> list[str]:
     """Lê uma planilha, aplica os hardcodes e grava o resultado em `caminho_saida`."""
+    if dominio == "borderos":
+        from . import borderos as _borderos
+        dfs = _borderos.ler_planilha(caminho_entrada)
+        relatorio = aplicar_dfs(dfs, regras, dominio)
+        _borderos.escrever_dfs(dfs, caminho_saida)
+        return relatorio
     from . import excel_io
     dfs, meta = excel_io.ler_workbook(caminho_entrada)
-    relatorio = aplicar_dfs(dfs, regras)
+    relatorio = aplicar_dfs(dfs, regras, dominio)
     excel_io.escrever_workbook(dfs, meta or {}, caminho_saida)
     return relatorio
 
@@ -295,11 +329,12 @@ def _dir() -> Path:
     return d
 
 
-def _arquivo() -> Path:
-    return _dir() / "hardcodes.json"
+def _arquivo(dominio: str = "faturas") -> Path:
+    return _dir() / _dominio_cfg(dominio)["arquivo"]
 
 
-def regra_vazia(aba: str = "itens_fatura") -> dict:
+def regra_vazia(aba: str | None = None, dominio: str = "faturas") -> dict:
+    aba = aba or _dominio_cfg(dominio)["aba_padrao"]
     return {
         "id": uuid.uuid4().hex,
         "nome": "",
@@ -332,8 +367,11 @@ def _normalizar(regra: dict) -> dict:
     }
 
 
-def padrao() -> list[dict]:
-    """Hardcodes que já acompanham o app (resources/hardcodes_padrao.json)."""
+def padrao(dominio: str = "faturas") -> list[dict]:
+    """Hardcodes que já acompanham o app (resources/hardcodes_padrao.json). Só o
+    domínio 'faturas' tem sementes; 'borderos' sempre começa vazio."""
+    if dominio != "faturas":
+        return []
     try:
         with resources.files("faturas_app.resources").joinpath(
                 "hardcodes_padrao.json").open("r", encoding="utf-8") as f:
@@ -342,18 +380,19 @@ def padrao() -> list[dict]:
         return []
 
 
-def carregar() -> list[dict]:
+def carregar(dominio: str = "faturas") -> list[dict]:
     """
-    Regras salvas. Na PRIMEIRA execução (arquivo ainda inexistente) grava os
-    hardcodes padrão — depois disso o arquivo manda, inclusive se o usuário
-    apagar tudo (lista vazia é respeitada, não é re-semeada).
+    Regras salvas do domínio (faturas/borderos). Na PRIMEIRA execução (arquivo
+    ainda inexistente) grava os hardcodes padrão — depois disso o arquivo
+    manda, inclusive se o usuário apagar tudo (lista vazia é respeitada, não é
+    re-semeada).
     """
-    fp = _arquivo()
+    fp = _arquivo(dominio)
     if not fp.exists():
-        sementes = padrao()
+        sementes = padrao(dominio)
         if sementes:
             try:
-                salvar(sementes)
+                salvar(sementes, dominio)
             except Exception:
                 pass
         return sementes
@@ -366,19 +405,19 @@ def carregar() -> list[dict]:
     return [_normalizar(r) for r in data]
 
 
-def salvar(regras: list[dict]) -> None:
+def salvar(regras: list[dict], dominio: str = "faturas") -> None:
     limpo = [_normalizar(r) for r in regras]
-    _arquivo().write_text(json.dumps(limpo, ensure_ascii=False, indent=1),
-                          encoding="utf-8")
+    _arquivo(dominio).write_text(json.dumps(limpo, ensure_ascii=False, indent=1),
+                                 encoding="utf-8")
 
 
-def colunas_da_aba(aba: str) -> list[str]:
+def colunas_da_aba(aba: str, dominio: str = "faturas") -> list[str]:
     """Colunas canônicas sugeridas para a aba (para os menus da interface)."""
-    return schema.all_canonical(aba)
+    return list(_dominio_cfg(dominio)["colunas"].get(aba, []))
 
 
-def abas_disponiveis() -> list[str]:
-    return list(schema.SHEET_ORDER)
+def abas_disponiveis(dominio: str = "faturas") -> list[str]:
+    return list(_dominio_cfg(dominio)["abas"])
 
 
 def resumo_texto(regra: dict) -> str:

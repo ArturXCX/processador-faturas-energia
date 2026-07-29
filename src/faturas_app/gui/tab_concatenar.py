@@ -51,8 +51,9 @@ class AbaConcatenar(ctk.CTkFrame):
                                         height=36, command=self._salvar, state="disabled")
         self.btn_salvar.grid(row=1, column=1, sticky="e")
 
-        # ── Área principal ────────────────────────────────────────────────
-        self.main = ctk.CTkFrame(self, fg_color="transparent")
+        # ── Área principal (rolável: evita que o progresso/log fiquem
+        # inacessíveis quando a janela é pequena) ─────────────────────────
+        self.main = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.main.pack(side="top", fill="both", expand=True)
         self.main.grid_columnconfigure(0, weight=1)
 
@@ -83,7 +84,7 @@ class AbaConcatenar(ctk.CTkFrame):
         op.grid(row=4, column=0, sticky="ew", pady=(10, 2))
         op.grid_columnconfigure(0, weight=1)
         self.var_addcols = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(op, text="Adicionar à planilha as colunas novas que ela não possui",
+        ctk.CTkCheckBox(op, text="Adicionar à planilha as colunas e abas novas que ela não possui",
                         variable=self.var_addcols).grid(row=0, column=0, sticky="w")
         self.btn_processar = ctk.CTkButton(op, text="▶  Processar e concatenar",
                                            height=36, command=self._processar)
@@ -182,6 +183,19 @@ class AbaConcatenar(ctk.CTkFrame):
                 self.progresso.escrever("Concatenação cancelada (mapeamento).")
                 return
             mapeamentos = dlg.resultado
+
+        if not self.var_addcols.get():
+            divs = concat.divergencias(self.uploaded_dfs, mapeamentos, novos)
+            if divs:
+                messagebox.showerror(
+                    "Formatos diferentes",
+                    "A planilha base não tem o mesmo formato das novas faturas "
+                    "processadas:\n\n" + "\n".join(f"• {d}" for d in divs) +
+                    "\n\nMarque “Adicionar à planilha as colunas e abas novas que ela "
+                    "não possui” para prosseguir mesmo assim, ou selecione uma planilha "
+                    "compatível.")
+                self.progresso.escrever("⚠ Concatenação cancelada (formatos divergentes).")
+                return
 
         try:
             res_dfs, meta, resumo = concat.concatenar(

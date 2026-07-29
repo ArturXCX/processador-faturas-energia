@@ -75,6 +75,30 @@ def mapeamento_de_meta(meta: dict | None, aba: str) -> dict[str, str | None] | N
     return {c["exibido"]: c.get("canonico") for c in info.get("colunas", [])}
 
 
+def divergencias(uploaded_dfs: dict[str, pd.DataFrame],
+                  mapeamentos: dict[str, dict[str, str | None]],
+                  novos_canon: dict[str, pd.DataFrame]) -> list[str]:
+    """
+    Compara o formato da planilha BASE (enviada) com o formato produzido pelas
+    NOVAS faturas processadas (colunas/abas canônicas). Devolve uma lista de
+    mensagens — uma por divergência encontrada (coluna ou aba inédita); lista
+    vazia significa que os formatos são compatíveis e a concatenação pode
+    prosseguir sem perda silenciosa de dados.
+    """
+    msgs: list[str] = []
+    abas_novas = [a for a, df in novos_canon.items() if df is not None and not df.empty]
+    for aba in abas_novas:
+        if aba not in uploaded_dfs:
+            msgs.append(f"Aba '{aba}': inédita — não existe na planilha base.")
+            continue
+        mapeadas = {c for c in (mapeamentos.get(aba) or {}).values() if c}
+        faltantes = [c for c in novos_canon[aba].columns if c not in mapeadas]
+        if faltantes:
+            msgs.append(f"Aba '{aba}': coluna(s) inédita(s) nas novas faturas, "
+                        f"ausente(s) na planilha base — {', '.join(faltantes)}.")
+    return msgs
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Concatenação
 # ──────────────────────────────────────────────────────────────────────────────

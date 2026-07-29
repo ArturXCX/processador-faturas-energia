@@ -464,20 +464,27 @@ def _estilizar(caminho, abas):
     wb.save(caminho)
 
 
-def escrever_planilha(borderos, unidades, resumo, caminho: str):
-    """Grava as três abas (borderos/unidades/resumo_valores) em `caminho`."""
+def escrever_dfs(dfs: dict, caminho: str):
+    """Grava um conjunto arbitrário de DataFrames (já no layout das abas de
+    borderô) em `caminho`, preservando a mesma formatação visual."""
     import pandas as pd
 
-    dfs = _dfs(borderos, unidades, resumo)
+    abas = [a for a in SHEET_ORDER if a in dfs] + [a for a in dfs if a not in SHEET_ORDER]
     with pd.ExcelWriter(caminho, engine="openpyxl") as w:
-        for aba in SHEET_ORDER:
+        for aba in abas:
             df = dfs[aba]
             if df is None or df.empty:
                 pd.DataFrame({"(sem dados)": []}).to_excel(w, sheet_name=aba, index=False)
             else:
                 df.to_excel(w, sheet_name=aba, index=False)
-    _estilizar(caminho, SHEET_ORDER)
+    _estilizar(caminho, abas)
     return caminho
+
+
+def escrever_planilha(borderos, unidades, resumo, caminho: str):
+    """Grava as três abas (borderos/unidades/resumo_valores) em `caminho`."""
+    dfs = _dfs(borderos, unidades, resumo)
+    return escrever_dfs(dfs, caminho)
 
 
 def gerar_planilha(pasta: str, caminho: str, progresso=None):
@@ -485,3 +492,81 @@ def gerar_planilha(pasta: str, caminho: str, progresso=None):
     borderos, unidades, resumo = processar_pasta(pasta, progresso)
     escrever_planilha(borderos, unidades, resumo, caminho)
     return borderos, unidades, resumo
+
+
+# --------------------------------------------------------------------------- #
+# Leitura de uma planilha de borderôs já existente (sem metadados embutidos —
+# o esquema de colunas é fixo, então não há renomeação/mapeamento a resolver).
+# --------------------------------------------------------------------------- #
+def ler_planilha(caminho: str) -> dict:
+    """Lê todas as abas visíveis de `caminho`. Devolve {nome_aba: DataFrame}."""
+    import pandas as pd
+
+    xls = pd.ExcelFile(caminho, engine="openpyxl")
+    dfs = {}
+    for nome in xls.sheet_names:
+        df = pd.read_excel(xls, sheet_name=nome, dtype=object)
+        if list(df.columns) == ["(sem dados)"]:
+            df = pd.DataFrame()
+        dfs[nome] = df
+    return dfs
+
+
+# --------------------------------------------------------------------------- #
+# "Adicionar a uma planilha" — complementar uma planilha de borderôs existente
+# com novos PDFs processados (mesmo espírito da aba de faturas, mas com
+# esquema de colunas FIXO, já que borderôs não suportam renomeação/exclusão de
+# colunas pelo usuário).
+# --------------------------------------------------------------------------- #
+def divergencias(base_dfs: dict) -> list[str]:
+    """
+    Compara as abas/colunas da planilha BASE com o esquema fixo de borderôs.
+    Devolve uma lista de mensagens (uma por divergência); vazia se compatível.
+    """
+    msgs: list[str] = []
+    for aba, cols in ((ABA_BORDEROS, BORDERO_COLS), (ABA_UNIDADES, UNIDADE_COLS),
+                     (ABA_RESUMO, RESUMO_COLS)):
+        base_df = base_dfs.get(aba)
+        if base_df is None:
+            msgs.append(f"Aba '{aba}': inédita — não existe na planilha base.")
+            continue
+        faltantes = [c for c in cols if c not in base_df.columns]
+        if faltantes:
+            msgs.append(f"Aba '{aba}': coluna(s) inédita(s), ausente(s) na planilha "
+                        f"base — {', '.join(faltantes)}.")
+    return msgs
+
+
+def concatenar(base_dfs: dict, novos_borderos: list, novos_unidades: list,
+              novos_resumo: list):
+    """
+    Concatena o resultado de `processar_pasta` com uma planilha base já
+    existente. Dedup: 'borderos' pela chave 'id_bordero' (evita duplicar um
+    borderô já processado); 'unidades'/'resumo_valores' pela linha inteira
+    (o mesmo bordê pode legitimamente repetir uma UC/rubrica).
+    Devolve (dfs_resultado, resumo:list[str]).
+    """
+    import pandas as pd
+
+    novos_dfs = _dfs(novos_borderos, novos_unidades, novos_resumo)
+    resultado: dict = {}
+    resumo: list[str] = []
+    especs = ((ABA_BORDEROS, BORDERO_COLS, ["id_bordero"]),
+              (ABA_UNIDADES, UNIDADE_COLS, None),
+              (ABA_RESUMO, RESUMO_COLS, None))
+    for aba, cols, chave in especs:
+        base_df = base_dfs.get(aba)
+        base_df = base_df.reindex(columns=cols) if base_df is not None else pd.DataFrame(columns=cols)
+        novo_df = novos_dfs[aba].reindex(columns=cols)
+        combinado = pd.concat([base_df, novo_df], ignore_index=True)
+        antes = len(combinado)
+        subset = chave if chave else None
+        combinado = combinado.drop_duplicates(subset=subset, keep="first").reset_index(drop=True)
+        n_dup = antes - len(combinado)
+        resultado[aba] = combinado
+        linha = (f"Aba '{aba}': {len(base_df)} (base) + {len(novo_df)} (novos) "
+                f"= {len(combinado)} linha(s).")
+        if n_dup:
+            linha += f" ({n_dup} duplicata(s) removida(s))."
+        resumo.append(linha)
+    return resultado, resumo
