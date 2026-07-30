@@ -216,6 +216,28 @@ O ponto sensível: re-concatenar faturas novas a uma planilha que o usuário já
 ### Casos de parsing conhecidos (Equatorial, `equatorial.py`)
 - **Leitura Anterior opcional** na medição: linha com 1 só inteiro (célula vazia
   no PDF) não é perdida (`pat_a` com grupo opcional).
+- **Medidor COLADO na grandeza** (`12794856-2ENERGIA ATIVA - KWH ÚNICO …`): no
+  template usado até meados de 2023, nas faturas de baixa tensão (posto ÚNICO),
+  as duas colunas saem sem espaço entre elas. Os padrões com o medidor à
+  esquerda usam `SEP = {H}*` (espaço opcional) por causa disso — era o motivo
+  de ~1.000 faturas de 2022–mai/2023 ficarem com a aba `medicao` vazia.
+- **Linha truncada com o medidor à direita** (`ENERGIA ATIVA - KWH PONTA 086926
+  0,012000 11556447-1`): faltam as colunas "Leitura Anterior" e "Consumo" —
+  capturada pelo `pat_e`, que exige o medidor no formato com hífen (`\d+-\d+`,
+  como a Equatorial sempre imprime) para não confundi-lo com um consumo solto.
+
+### Casos de parsing conhecidos (CHESP, `chesp.py`)
+- **"Único" corrompido** (`?nico`, `¿ico`, `Ãšnico`): a fonte do PDF não traz o
+  caractere acentuado. O `POSTO` aceita qualquer token curto terminado em `ico`
+  e `_padronizar_medicao_chesp` normaliza para `ÚNICO`.
+- **`Energia Reativa-kVArh`**: alternativa mais longa que `Energia Reativa`,
+  precisa vir antes na alternância; normalizada para `ENERGIA REATIVA - KWH`.
+- **Dois layouts antigos (2022)** em `_medicao_layouts_antigos`: "Modelo 6"
+  (`ATIVA kWh 56475,000 …`, sem coluna de posto) e "Grupo A" (`kWh Ativa F P
+  10.549,471 …`, rótulo juntando grandeza e posto). Nos dois o nº do medidor
+  vem do cabeçalho (`Nº MEDIDOR: …`), não da linha. Só rodam **quando o padrão
+  atual não devolveu nenhuma linha** — assim nenhuma fatura que já era extraída
+  corretamente muda de resultado.
 - **RELIGAÇÃO/DESLIGAMENTO PROGRAMADO**: itens financeiros COM quantidade
   (nome+qtd+preço+valor) — tratados no padrão `mem` junto de EMIS. SEGUNDA VIA.
 - **DEMANDA ISENTO DE ICMS**: às vezes alíquota `0` sem `%` e sem coluna ICMS (7
