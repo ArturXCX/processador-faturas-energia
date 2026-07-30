@@ -837,11 +837,24 @@ def extrair_medicao(texto, id_fatura):
     # sem ela, pat_a/pat_b aceitavam qualquer número ali, inclusive a 2ª
     # leitura, jogando os valores certos nas colunas erradas.
     CONST = r'(\d[\d.]*,\d{6})'
+    # SEPARADOR ENTRE O MEDIDOR (à esquerda) E A GRANDEZA: `{H}*`, NÃO `{H}+`.
+    # No template usado pela Equatorial/ENEL até meados de 2023 (faturas de
+    # baixa tensão, posto ÚNICO) as duas colunas saem ENCOSTADAS no texto do
+    # pdfplumber — o PDF não deixa folga entre elas. Casos reais:
+    #     12794856-2ENERGIA ATIVA - KWH ÚNICO 00000 00000 1,000000 0
+    #     11242277-2ENERGIA ATIVA - KWH ÚNICO 70695 71451 1,000000 756
+    # Exigindo pelo menos um espaço, NENHUMA linha de medição dessas faturas
+    # casava e a fatura inteira ficava sem medição (~1.000 faturas de 2022 a
+    # maio/2023). Tornar o espaço opcional não afeta as faturas que já
+    # funcionavam: quando o espaço existe, `\d+-?\d*` continua parando no mesmo
+    # ponto (a grandeza começa por letra, nunca por dígito), então a captura é
+    # idêntica à de antes.
+    SEP = rf'{H}*'
     pat_a = re.compile(
         rf'^{GRANDEZA}{H}+{POSTO}{H}+(\d+)(?:{H}+(\d+))?{H}+{CONST}{H}+([\d.,]+){H}+(\d+-?\d*)',
         re.IGNORECASE | re.MULTILINE)
     pat_b = re.compile(
-        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+(\d+)(?:{H}+(\d+))?{H}+{CONST}{H}+([\d.,]+)',
+        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+(\d+)(?:{H}+(\d+))?{H}+{CONST}{H}+([\d.,]+)',
         re.IGNORECASE | re.MULTILINE)
     # Linha com as DUAS leituras e a constante, mas SEM a coluna de consumo (o
     # PDF não a imprime naquela linha). Antes da constante exigir 6 casas
@@ -851,7 +864,7 @@ def extrair_medicao(texto, id_fatura):
     # 530341 0,375000") gravava Const Medidor = 530341 (a leitura atual) e
     # Consumo kWh = 0,375 (a constante real).
     pat_d = re.compile(
-        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+(\d+){H}+{CONST}{H}*$',
+        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+(\d+){H}+{CONST}{H}*$',
         re.IGNORECASE | re.MULTILINE)
     # Linha TRUNCADA: o PDF imprime medidor, grandeza, posto, UMA leitura e a
     # constante, e acaba — a coluna de consumo não existe naquela linha. Ex.:
@@ -861,20 +874,36 @@ def extrair_medicao(texto, id_fatura):
     # este padrão exclusivo das linhas truncadas: uma linha completa sempre tem
     # mais um número depois da constante e é capturada pelo pat_b.
     pat_c = re.compile(
-        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+{CONST}{H}*$',
+        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+{CONST}{H}*$',
         re.IGNORECASE | re.MULTILINE)
     # Linha SEM nenhuma leitura (faturamento por média/mínimo: não há leitura
     # real do medidor naquele mês — só a constante, fixa, continua impressa).
     # Caso real: 2024012783899.pdf ("10831393-0 ENERGIA ATIVA - KWH ÚNICO
     # 1,000000").
     pat_f = re.compile(
-        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}+{CONST}{H}*$',
+        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+{CONST}{H}*$',
         re.IGNORECASE | re.MULTILINE)
     # Linha totalmente em branco: só medidor/grandeza/posto, sem nenhum
     # número (nem leitura, nem constante, nem consumo). Caso real:
     # 2022036945790.pdf ("12974430-1 ENERGIA GERAÇÃO - KWH RESERVADO").
     pat_h = re.compile(
-        rf'^(\d+-?\d*){H}+{GRANDEZA}{H}+{POSTO}{H}*$',
+        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}*$',
+        re.IGNORECASE | re.MULTILINE)
+    # Linha TRUNCADA no layout do pat_a (medidor à DIREITA): o PDF imprime
+    # grandeza, posto, UMA leitura, a constante e o medidor — as colunas
+    # "Leitura Anterior" e "Consumo" não existem naquela linha. Caso real
+    # (2024118160906.pdf):
+    #     ENERGIA ATIVA - KWH PONTA 086926 0,012000 11556447-1
+    #     DEMANDA - KW RESERVADO 011017 0,048000 11556447-1 03/01/2025
+    # O pat_a não casa aqui porque exige um número de consumo entre a constante
+    # e o medidor. É o espelho do pat_c para o layout de medidor à direita.
+    #
+    # O medidor é exigido no formato COM hífen (`\d+-\d+`) — é como a Equatorial
+    # imprime 100% dos medidores (confirmado em ~68 mil linhas já extraídas:
+    # 32117-6, 1849892-2, 10763564-0). Sem essa exigência o padrão poderia ler
+    # uma coluna de consumo solta como se fosse o medidor.
+    pat_e = re.compile(
+        rf'^{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+{CONST}{H}+(\d+-\d+)(?![\d-])',
         re.IGNORECASE | re.MULTILINE)
 
     # Dedup APENAS de linhas completamente idênticas: uma mesma grandeza/posto
@@ -948,6 +977,19 @@ def extrair_medicao(texto, id_fatura):
                         'Grandezas': gr, 'Postos horarios': po,
                         'Leitura Anterior': None, 'Leitura Atual': int(m.group(4)),
                         'Const Medidor': pf(m.group(5)), 'Consumo kWh': None,
+                        'Medidor': medidor})
+    for m in pat_e.finditer(texto):
+        gr, po = m.group(1).upper(), m.group(2).upper()
+        medidor = m.group(5)
+        # Mesma proteção do pat_c: só entra se a grandeza/posto/medidor ainda
+        # não veio de uma linha completa (o pat_a tem prioridade).
+        if any(l['Grandezas'] == gr and l['Postos horarios'] == po
+               and l['Medidor'] == medidor for l in medicao):
+            continue
+        medicao.append({'id_fatura': id_fatura,
+                        'Grandezas': gr, 'Postos horarios': po,
+                        'Leitura Anterior': None, 'Leitura Atual': int(m.group(3)),
+                        'Const Medidor': pf(m.group(4)), 'Consumo kWh': None,
                         'Medidor': medidor})
     for m in pat_f.finditer(texto):
         gr, po = m.group(2).upper(), m.group(3).upper()

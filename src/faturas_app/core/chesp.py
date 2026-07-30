@@ -725,9 +725,19 @@ def extrair_medicao_chesp(texto, id_fatura):
     texto = _re.sub(r'\bº\b', '0', texto)
     texto = _re.sub(r'\b[jf]o\]\b', '0', texto, flags=_re.IGNORECASE)
     medicao = []
-    GRANDEZA = (r'(Energia Ativa-kWh|Energia Reativa|Demanda-kW|'
-                r'Demanda Reativa|Demanda kW)')
-    POSTO = r'(Ponta|Fora Ponta|Fora\s*[Pp]onta|Reservado|Unico|Único)'
+    # 'Energia Reativa-kVArh' ANTES de 'Energia Reativa': a alternativa mais
+    # longa precisa ser testada primeiro, senão casa só o prefixo e o '-kVArh'
+    # que sobra impede o `\s+` seguinte (a linha inteira era perdida).
+    GRANDEZA = (r'(Energia Ativa-kWh|Energia Reativa-kVArh|Energia Reativa|'
+                r'Demanda-kW|Demanda Reativa|Demanda kW)')
+    # 'Único' sai CORROMPIDO em parte das faturas (a fonte do PDF não traz o
+    # caractere acentuado): o pdfplumber devolve '?nico', '¿ico' ou 'Ãšnico'.
+    # Casos reais: FATURA Nº 796360 ('?nico'), Nº 1198359 ('¿ico'),
+    # Nº 183776 ('Ãšnico'). Como nenhum outro posto termina em 'ico', aceitar
+    # um token curto sem espaço/dígito terminado em 'ico' cobre todas as
+    # variantes; `_padronizar_medicao_chesp` normaliza tudo para 'ÚNICO'.
+    POSTO = (r'(Ponta|Fora Ponta|Fora\s*[Pp]onta|Reservado|Unico|Único|'
+             r'[^\s\d]{1,6}ico)')
 
     pat = re.compile(
         rf'^(\d+)\s+{GRANDEZA}\s+{POSTO}\s+'
@@ -752,7 +762,106 @@ def extrair_medicao_chesp(texto, id_fatura):
             continue
         seen.add(key)
         medicao.append(linha)
+    if not medicao:
+        # Só quando o layout atual não rendeu NADA: faturas antigas (2022) usam
+        # outros dois desenhos de tabela. Rodar apenas no vazio garante que
+        # nenhuma fatura que já era extraída corretamente mude de resultado.
+        medicao = _medicao_layouts_antigos(texto, id_fatura)
     _padronizar_medicao_chesp(medicao)
+    return medicao
+
+
+# Medidor fora da tabela nos layouts antigos: 'Nº MEDIDOR: 1194091' ou
+# 'N° MEDIDOR(kWh): 185' (o 'º' e o '°' são caracteres distintos no PDF).
+_RE_MEDIDOR_CABECALHO = re.compile(
+    r'N[º°o]?\s*MEDIDOR\s*(?:\(\s*kWh\s*\))?\s*:\s*(\d+)', re.IGNORECASE)
+
+# Layout "Modelo 6" antigo (baixa tensão, uma única linha de medição, sem
+# coluna de posto e sem o nº do medidor na tabela). Caso real
+# (FATURA Nº 136454.pdf, mai/2022):
+#     TIPO DE MEDIÇÃO GRANDEZA LEITURA ANTERIOR LEITURA ATUAL CONSTANTE ...
+#     ATIVA kWh 56475,000 60848,000 1,00 4.373 4.373
+_RE_MED_MODELO6 = re.compile(
+    r'^(ATIVA|REATIVA)\s+(kWh|kVArh)\s+'
+    r'([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)(?=\s|$)',
+    re.IGNORECASE | re.MULTILINE)
+
+# Layout "Grupo A" antigo (média tensão). Caso real (FATURA Nº 78902.pdf,
+# mar/2022) — o rótulo junta grandeza e posto e o '(Q)' marca as grandezas
+# de demanda:
+#     Tipo de consumo Anterior Atual Constante Total Faturado
+#     kWh Ativa Ponta   922,762    932,334 40,00000   392   392
+#     kWh Res             0,000      0,000 40,00000     0     0
+#     kW F P (Q)          0,688      0,761 40,00000    31    40
+# 'kWh Ativa' vem antes de 'kWh', e 'kWh' antes de 'kW': são prefixos umas das
+# outras e a alternância é testada na ordem escrita.
+#
+# SEM âncora '$' no fim: nesse layout a coluna da direita da fatura cai na
+# MESMA linha de texto, depois dos cinco números. Ex.:
+#     kWh Ativa F P 10.549,471 10.654,866 40,00000 4.321 4.321 CONSUMO FORA…
+# Com o '$' essas linhas (4 das 11) eram descartadas. Os cinco valores têm
+# posição fixa logo após o rótulo, então o texto que sobra à direita é inócuo.
+_RE_MED_GRUPO_A = re.compile(
+    r'^(kWh Ativa|kWh|UFER|kW|DMCR|Ultrapass)\s+'
+    r'(Ponta|F\s*\.?\s*P\.?|Res(?:ervado)?)\s*(?:\(Q\))?\s+'
+    r'([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)(?=\s|$)',
+    re.MULTILINE)
+
+_GRANDEZA_GRUPO_A = {
+    'KWH ATIVA': 'ENERGIA ATIVA - KWH',
+    'KWH':       'ENERGIA ATIVA - KWH',   # 'kWh Res' = ativa no posto reservado
+    'UFER':      'UFER',
+    'KW':        'DEMANDA - KW',
+    'DMCR':      'DMCR',
+    'ULTRAPASS': 'ULTRAPASSAGEM',
+}
+
+
+def _int_br(s):
+    """'56475,000' -> 56475 · '10.549,471' -> 10549 · '4.373' -> 4373."""
+    v = pf(s)
+    return int(v) if v is not None else None
+
+
+def _medicao_layouts_antigos(texto, id_fatura):
+    """
+    Medição das faturas CHESP de 2022, cujas tabelas têm outro desenho (ver
+    os dois regexes acima). Nesses layouts o nº do medidor não fica na linha:
+    vem do cabeçalho ('Nº MEDIDOR: ...'), o mesmo para todas as linhas.
+    """
+    m_med = _RE_MEDIDOR_CABECALHO.search(texto)
+    medidor = m_med.group(1) if m_med else None
+
+    medicao = []
+    for m in _RE_MED_MODELO6.finditer(texto):
+        grandeza = ('ENERGIA ATIVA - KWH' if m.group(1).upper() == 'ATIVA'
+                    else 'ENERGIA REATIVA - KWH')
+        medicao.append({'id_fatura': id_fatura,
+                        'Grandezas': grandeza,
+                        'Postos horarios': 'ÚNICO',   # fatura sem posto tarifário
+                        'Leitura Anterior': _int_br(m.group(3)),
+                        'Leitura Atual': _int_br(m.group(4)),
+                        'Const Medidor': pf(m.group(5)),
+                        # 'CONSUMO MEDIDO' (grupo 6), não o faturado — é o que
+                        # a coluna 'Consumo kWh' guarda no layout atual.
+                        'Consumo kWh': pf(m.group(6)),
+                        'Medidor': medidor})
+    if medicao:
+        return medicao
+
+    for m in _RE_MED_GRUPO_A.finditer(texto):
+        rotulo = re.sub(r'\s+', ' ', m.group(1)).strip().upper()
+        posto = m.group(2).upper().replace('.', '').strip()
+        posto = ('FORA PONTA' if posto.replace(' ', '') == 'FP'
+                 else 'RESERVADO' if posto.startswith('RES') else posto)
+        medicao.append({'id_fatura': id_fatura,
+                        'Grandezas': _GRANDEZA_GRUPO_A[rotulo],
+                        'Postos horarios': posto,
+                        'Leitura Anterior': _int_br(m.group(3)),
+                        'Leitura Atual': _int_br(m.group(4)),
+                        'Const Medidor': pf(m.group(5)),
+                        'Consumo kWh': pf(m.group(6)),   # 'Total', não 'Faturado'
+                        'Medidor': medidor})
     return medicao
 
 
@@ -760,16 +869,22 @@ def _padronizar_medicao_chesp(medicao):
     """
     Padroniza (só CHESP) 'Grandezas' e 'Postos horarios' das linhas de medição:
       - Grandezas: MAIÚSCULAS; todo hífen fica cercado por 1 espaço de cada lado
-        (não encosta em palavra); 'ENERGIA REATIVA' vira 'ENERGIA REATIVA - KWH'.
-      - Postos horarios: MAIÚSCULAS.
+        (não encosta em palavra); 'ENERGIA REATIVA' e 'ENERGIA REATIVA - KVARH'
+        viram 'ENERGIA REATIVA - KWH' (rótulo usado pela Equatorial, para as
+        duas fornecedoras saírem com o mesmo vocabulário na planilha).
+      - Postos horarios: MAIÚSCULAS; qualquer variante corrompida de 'Único'
+        (ver POSTO em `extrair_medicao_chesp`) vira 'ÚNICO'.
     """
     for linha in medicao:
         g = str(linha.get('Grandezas', '')).upper()
         g = re.sub(r'\s*-\s*', ' - ', g).strip()
-        if g == 'ENERGIA REATIVA':
+        if g in ('ENERGIA REATIVA', 'ENERGIA REATIVA - KVARH'):
             g = 'ENERGIA REATIVA - KWH'
         linha['Grandezas'] = g
-        linha['Postos horarios'] = str(linha.get('Postos horarios', '')).upper()
+        p = str(linha.get('Postos horarios', '')).upper()
+        if p.endswith('ICO'):          # ÚNICO, UNICO, ?NICO, ¿ICO, ÃŠNICO…
+            p = 'ÚNICO'
+        linha['Postos horarios'] = p
     return medicao
 
 
