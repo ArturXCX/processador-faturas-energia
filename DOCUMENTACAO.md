@@ -222,9 +222,21 @@ O ponto sensível: re-concatenar faturas novas a uma planilha que o usuário já
   esquerda usam `SEP = {H}*` (espaço opcional) por causa disso — era o motivo
   de ~1.000 faturas de 2022–mai/2023 ficarem com a aba `medicao` vazia.
 - **Linha truncada com o medidor à direita** (`ENERGIA ATIVA - KWH PONTA 086926
-  0,012000 11556447-1`): faltam as colunas "Leitura Anterior" e "Consumo" —
+  0,012000 11556447-1`): falta uma das colunas de leitura e a de "Consumo" —
   capturada pelo `pat_e`, que exige o medidor no formato com hífen (`\d+-\d+`,
   como a Equatorial sempre imprime) para não confundi-lo com um consumo solto.
+- **Em QUAL coluna fica a leitura de uma linha truncada** (`pat_c`/`pat_e`): o
+  texto achatado do pdfplumber **não** permite saber — `… ÚNICO 000000 50,000000`
+  é idêntica tendo faltado a coluna da esquerda ou a da direita, e as duas coisas
+  ocorrem no acervo (medido nas 31 faturas com linha truncada: 78 linhas em que
+  falta a "Atual", 6 em que falta a "Anterior"). Por isso
+  `_resolver_coluna_leitura` **relê o PDF pelas coordenadas** e compara o x da
+  leitura com o das colunas, ancorando (1) nas linhas completas da própria
+  fatura ou (2) na tabela `_GRADE_MEDICAO` (x da constante → x das leituras,
+  medida em ~4.400 linhas completas). Só roda quando há linha truncada (~38 de
+  10.214 faturas) e, se o PDF não abrir (escaneado/OCR), mantém o padrão
+  "Anterior". Chutar sempre a mesma coluna era o que gerava a linha impossível
+  **"Leitura Atual > Leitura Anterior com Consumo zero"**.
 
 ### Casos de parsing conhecidos (CHESP, `chesp.py`)
 - **"Único" corrompido** (`?nico`, `¿ico`, `Ãšnico`): a fonte do PDF não traz o

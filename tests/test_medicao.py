@@ -66,15 +66,32 @@ def test_eq_com_espaco_continua_igual():
 # EQUATORIAL — medidor à DIREITA, linha sem leitura anterior nem consumo
 # ─────────────────────────────────────────────────────────────────────────────
 def test_eq_truncada_com_medidor_a_direita():
-    """2024118160906.pdf — faltam as colunas 'Leitura Anterior' e 'Consumo'."""
+    """2024118160906.pdf — faltam as colunas 'Leitura Atual' e 'Consumo'.
+
+    A leitura que sobra é a ANTERIOR: no PDF ela sai em x≈225 (coluna
+    "Anterior"), enquanto a "Atual" fica em x≈285 — conferido contra as 1.090
+    linhas completas do acervo. Gravá-la como "Leitura Atual" gerava a linha
+    impossível 'Atual > Anterior com Consumo zero'.
+    """
     txt = ("ENERGIA ATIVA - KWH PONTA 086926 0,012000 11556447-1\n"
            "DEMANDA - KW RESERVADO 011017 0,048000 11556447-1 03/01/2025\n"
            "UFER PONTA 074175 0,012000 11556447-1 2384,76\n")
     assert _linhas(equatorial.extrair_medicao(txt, "F")) == [
-        ("ENERGIA ATIVA - KWH", "PONTA", 0, 86926, 0.012, 0.0, "11556447-1"),
-        ("DEMANDA - KW", "RESERVADO", 0, 11017, 0.048, 0.0, "11556447-1"),
-        ("UFER", "PONTA", 0, 74175, 0.012, 0.0, "11556447-1"),
+        ("ENERGIA ATIVA - KWH", "PONTA", 86926, 0, 0.012, 0.0, "11556447-1"),
+        ("DEMANDA - KW", "RESERVADO", 11017, 0, 0.048, 0.0, "11556447-1"),
+        ("UFER", "PONTA", 74175, 0, 0.012, 0.0, "11556447-1"),
     ]
+
+
+def test_eq_truncada_nunca_gera_atual_maior_que_anterior_sem_consumo():
+    """Nenhuma linha truncada pode sair com 'Atual > Anterior' e consumo zero —
+    é a assinatura de valor jogado na coluna errada."""
+    txt = ("ENERGIA ATIVA - KWH PONTA 086926 0,012000 11556447-1\n"
+           "12982533-6ENERGIA ATIVA - KWH ÚNICO 000123 50,000000\n")
+    for m in equatorial.extrair_medicao(txt, "F"):
+        impossivel = (m["Leitura Atual"] > m["Leitura Anterior"]
+                      and not m["Consumo kWh"])
+        assert not impossivel, m
 
 
 def test_eq_linha_completa_tem_prioridade_sobre_a_truncada():
