@@ -806,14 +806,138 @@ def extrair_impostos(texto, id_fatura):
 # ──────────────────────────────────────────────────────────────────────────────
 # 5. MEDIÇÃO
 # ──────────────────────────────────────────────────────────────────────────────
-def extrair_medicao(texto, id_fatura):
+# mais longas primeiro; REATIVA e UFER GERAÇÃO só existem no layout antigo
+_GRANDEZA_MED = (r'(ENERGIA REATIVA GERA[ÇC][ÃA]O - KWH|ENERGIA REATIVA - KWH'
+                 r'|ENERGIA GERA[ÇC][ÃA]O - KWH|ENERGIA ATIVA - KWH'
+                 r'|DEMANDA GERA[ÇC][ÃA]O - KW|DEMANDA - KW'
+                 r'|UFER GERA[ÇC][ÃA]O|UFER|DMCR)')
+_POSTO_MED = r'(PONTA|FORA PONTA|RESERVADO|INTERMEDI[ÁA]RIO|[ÚU]NICO)'
+
+
+# Grade de colunas do bloco de medição, por template: x da CONSTANTE (a única
+# coluna sempre impressa) -> x das leituras "Anterior" e "Atual". Medida em
+# ~4.400 linhas COMPLETAS do acervo (10.214 faturas). Só é consultada quando a
+# própria fatura não tem nenhuma linha completa para servir de âncora.
+_GRADE_MEDICAO = {
+    ('dir', 330): (225, 284), ('dir', 335): (228, 287), ('dir', 340): (228, 288),
+    ('esq', 310): (263, 288), ('esq', 340): (255, 300), ('esq', 415): (308, 369),
+    ('esq', 420): (309, 370), ('esq', 445): (316, 384), ('esq', 450): (316, 385),
+}
+_RE_CONST_MED = re.compile(r'^\d[\d.]*,\d{6}$')
+_RE_INT_MED = re.compile(r'^\d+$')
+_RE_LINHA_DIR = re.compile(rf'^{_GRANDEZA_MED}\s+{_POSTO_MED}\b', re.IGNORECASE)
+_RE_LINHA_ESQ = re.compile(rf'^\d+-?\d*\s*{_GRANDEZA_MED}\s+{_POSTO_MED}\b',
+                           re.IGNORECASE)
+
+
+def _linhas_medicao_com_x(pdf_path):
+    """
+    Relê o PDF pelas COORDENADAS e devolve, para cada linha do bloco de medição,
+    `(layout, [(x, valor)] das leituras, x_da_constante, texto_da_constante)`.
+    """
+    linhas = []
+    with pdfplumber.open(pdf_path) as pdf:
+        palavras = []
+        for pg in pdf.pages:
+            palavras.extend(pg.extract_words())
+    agrupadas = {}
+    for w in palavras:
+        agrupadas.setdefault(round(w['top'] / 3), []).append(w)
+    for chave in sorted(agrupadas):
+        ws = sorted(agrupadas[chave], key=lambda w: w['x0'])
+        # NFC como em `extrair_texto`: sem isso um 'ÚNICO' decomposto (U + acento
+        # combinante) não casa com [ÚU]NICO e a linha passaria despercebida.
+        txt = unicodedata.normalize('NFC', ' '.join(w['text'] for w in ws))
+        if _RE_LINHA_ESQ.match(txt):
+            layout = 'esq'
+        elif _RE_LINHA_DIR.match(txt):
+            layout = 'dir'
+        else:
+            continue
+        const = next((w for w in ws if _RE_CONST_MED.match(w['text'])), None)
+        if const is None:
+            continue
+        # leituras = inteiros puros à esquerda da constante (o medidor, quando
+        # fica à esquerda, mora antes de x=60 e não conta).
+        leituras = [(w['x0'], int(w['text'])) for w in ws
+                    if _RE_INT_MED.match(w['text']) and w['x0'] < const['x0'] - 5
+                    and not (layout == 'esq' and w['x0'] < 60)]
+        linhas.append((layout, leituras, const['x0'], const['text']))
+    return linhas
+
+
+def _resolver_coluna_leitura(pdf_path, ambiguas):
+    """
+    Decide, PELAS COORDENADAS, se a leitura solitária de uma linha truncada está
+    na coluna "Leitura Anterior" ou "Leitura Atual".
+
+    Por que isso não sai do texto: o `extract_text` do pdfplumber achata a
+    linha, então `ENERGIA ATIVA - KWH ÚNICO 000000 50,000000` é idêntica tendo
+    faltado a coluna da esquerda ou a da direita. E as duas coisas acontecem de
+    verdade no acervo — medido nas 31 faturas com linha truncada:
+      • falta a "Atual" (não houve leitura no mês; sobra a do mês passado) — 78 linhas;
+      • falta a "Anterior" (medidor novo, sem leitura anterior)             —  6 linhas.
+    Chutar sempre a mesma coluna erra um dos dois grupos; foi o que produzia
+    linhas impossíveis do tipo "Atual > Anterior com Consumo zero".
+
+    Âncora, em ordem: (1) as linhas COMPLETAS da própria fatura, que mostram
+    onde ficam as duas colunas; (2) `_GRADE_MEDICAO`, quando a fatura não tem
+    nenhuma linha completa. Sem nenhuma das duas, mantém o padrão (Anterior),
+    que é o caso majoritário.
+    """
+    try:
+        linhas = _linhas_medicao_com_x(pdf_path)
+    except Exception:
+        return                                   # PDF ilegível/escaneado: mantém o padrão
+    if not linhas:
+        return
+
+    # (1) âncora local: mediana do x da 1ª e da 2ª leitura das linhas completas
+    local = {}
+    for layout in ('esq', 'dir'):
+        pares = [lt for lay, lt, _cx, _ct in linhas if lay == layout and len(lt) >= 2]
+        if pares:
+            xs_ant = sorted(p[0][0] for p in pares)
+            xs_atu = sorted(p[1][0] for p in pares)
+            local[layout] = (xs_ant[len(xs_ant) // 2], xs_atu[len(xs_atu) // 2])
+
+    for row, layout, leitura, const_txt in ambiguas:
+        alvo = next(((lt, cx) for lay, lt, cx, ct in linhas
+                     if lay == layout and ct == const_txt and len(lt) == 1
+                     and lt[0][1] == leitura), None)
+        if alvo is None:
+            continue                             # linha não localizada: mantém o padrão
+        leituras, const_x = alvo
+        x_leitura = leituras[0][0]
+        grade = local.get(layout)
+        if grade is None:
+            # sem âncora na própria fatura: identifica o template pelo x da
+            # constante (o mais próximo, até 8pt de folga).
+            candidatos = [(abs(ck - const_x), g)
+                          for (lay, ck), g in _GRADE_MEDICAO.items()
+                          if lay == layout and abs(ck - const_x) <= 8]
+            grade = min(candidatos)[1] if candidatos else None
+        if grade is None:
+            continue
+        x_ant, x_atu = grade
+        if abs(x_leitura - x_atu) < abs(x_leitura - x_ant):
+            # era a coluna "Atual": a fatura não imprimiu a "Anterior".
+            row['Leitura Atual'], row['Leitura Anterior'] = row['Leitura Anterior'], None
+
+
+def extrair_medicao(texto, id_fatura, pdf_path=None):
+    """
+    Linhas da aba `medicao`. `pdf_path` é OPCIONAL e só serve para desempatar,
+    pelas coordenadas do PDF, a coluna das linhas truncadas (ver
+    `_resolver_coluna_leitura`); sem ele o resultado é o mesmo de sempre, com o
+    palpite padrão. Chamadas antigas (2 argumentos) seguem funcionando.
+    """
     medicao = []
-    # mais longas primeiro; REATIVA e UFER GERAÇÃO só existem no layout antigo
-    GRANDEZA = (r'(ENERGIA REATIVA GERA[ÇC][ÃA]O - KWH|ENERGIA REATIVA - KWH'
-                r'|ENERGIA GERA[ÇC][ÃA]O - KWH|ENERGIA ATIVA - KWH'
-                r'|DEMANDA GERA[ÇC][ÃA]O - KW|DEMANDA - KW'
-                r'|UFER GERA[ÇC][ÃA]O|UFER|DMCR)')
-    POSTO = r'(PONTA|FORA PONTA|RESERVADO|INTERMEDI[ÁA]RIO|[ÚU]NICO)'
+    # linhas truncadas: (row, layout, leitura, texto_da_constante). A coluna
+    # dessas leituras não é decidível pelo texto achatado — ver adiante.
+    ambiguas = []
+    GRANDEZA = _GRANDEZA_MED
+    POSTO = _POSTO_MED
 
     # A 2ª leitura é OPCIONAL: em algumas faturas a coluna "Leitura Anterior"
     # vem vazia no PDF (ex.: DEMANDA GERAÇÃO - KW / FORA PONTA), restando só um
@@ -891,12 +1015,24 @@ def extrair_medicao(texto, id_fatura):
         re.IGNORECASE | re.MULTILINE)
     # Linha TRUNCADA no layout do pat_a (medidor à DIREITA): o PDF imprime
     # grandeza, posto, UMA leitura, a constante e o medidor — as colunas
-    # "Leitura Anterior" e "Consumo" não existem naquela linha. Caso real
+    # "Leitura Atual" e "Consumo" não existem naquela linha. Caso real
     # (2024118160906.pdf):
     #     ENERGIA ATIVA - KWH PONTA 086926 0,012000 11556447-1
     #     DEMANDA - KW RESERVADO 011017 0,048000 11556447-1 03/01/2025
     # O pat_a não casa aqui porque exige um número de consumo entre a constante
     # e o medidor. É o espelho do pat_c para o layout de medidor à direita.
+    #
+    # QUAL coluna é a leitura que sobrou: por padrão a **ANTERIOR**, e o
+    # `_resolver_coluna_leitura` confirma pelas coordenadas do PDF. O texto
+    # achatado perde a coluna, mas o x não: neste layout as leituras saem em
+    # x≈225 (Anterior) e x≈285 (Atual) — medido em 1.090 linhas completas do
+    # acervo. Nas 59 linhas truncadas deste layout, as 59 estão em x≈225, ou
+    # seja, é a "Leitura Atual" que a fatura não imprimiu. Faz sentido: sem
+    # leitura no mês (em 2024118160906.pdf, fatura de demanda contratada, com
+    # consumo 0,0000 em NOV e DEZ/24 no próprio histórico) só resta a leitura
+    # do mês passado, e por isso o consumo também não é impresso. Gravar esse
+    # número como "Leitura Atual" produzia a linha impossível
+    # "Atual > Anterior com consumo zero".
     #
     # O medidor é exigido no formato COM hífen (`\d+-\d+`) — é como a Equatorial
     # imprime 100% dos medidores (confirmado em ~68 mil linhas já extraídas:
@@ -973,11 +1109,13 @@ def extrair_medicao(texto, id_fatura):
         if any(l['Grandezas'] == gr and l['Postos horarios'] == po
                and l['Medidor'] == medidor for l in medicao):
             continue
-        medicao.append({'id_fatura': id_fatura,
-                        'Grandezas': gr, 'Postos horarios': po,
-                        'Leitura Anterior': None, 'Leitura Atual': int(m.group(4)),
-                        'Const Medidor': pf(m.group(5)), 'Consumo kWh': None,
-                        'Medidor': medidor})
+        linha = {'id_fatura': id_fatura,
+                 'Grandezas': gr, 'Postos horarios': po,
+                 'Leitura Anterior': int(m.group(4)), 'Leitura Atual': None,
+                 'Const Medidor': pf(m.group(5)), 'Consumo kWh': None,
+                 'Medidor': medidor}
+        medicao.append(linha)
+        ambiguas.append((linha, 'esq', int(m.group(4)), m.group(5)))
     for m in pat_e.finditer(texto):
         gr, po = m.group(1).upper(), m.group(2).upper()
         medidor = m.group(5)
@@ -986,11 +1124,13 @@ def extrair_medicao(texto, id_fatura):
         if any(l['Grandezas'] == gr and l['Postos horarios'] == po
                and l['Medidor'] == medidor for l in medicao):
             continue
-        medicao.append({'id_fatura': id_fatura,
-                        'Grandezas': gr, 'Postos horarios': po,
-                        'Leitura Anterior': None, 'Leitura Atual': int(m.group(3)),
-                        'Const Medidor': pf(m.group(4)), 'Consumo kWh': None,
-                        'Medidor': medidor})
+        linha = {'id_fatura': id_fatura,
+                 'Grandezas': gr, 'Postos horarios': po,
+                 'Leitura Anterior': int(m.group(3)), 'Leitura Atual': None,
+                 'Const Medidor': pf(m.group(4)), 'Consumo kWh': None,
+                 'Medidor': medidor}
+        medicao.append(linha)
+        ambiguas.append((linha, 'dir', int(m.group(3)), m.group(4)))
     for m in pat_f.finditer(texto):
         gr, po = m.group(2).upper(), m.group(3).upper()
         medidor = m.group(1)
@@ -1013,6 +1153,10 @@ def extrair_medicao(texto, id_fatura):
                         'Leitura Anterior': None, 'Leitura Atual': None,
                         'Const Medidor': None, 'Consumo kWh': None,
                         'Medidor': medidor})
+
+    # Linha truncada: só o PDF (coordenadas) diz em qual coluna a leitura está.
+    if pdf_path and ambiguas:
+        _resolver_coluna_leitura(pdf_path, ambiguas)
 
     # Coluna que o PDF não imprimiu (leitura, constante ou consumo faltando)
     # vira "0", nunca fica nula.
@@ -1096,7 +1240,7 @@ def _montar_resultado(txt, pdf_path, numero_forcado=None):
         'unidade_consumidora':  cli,
         'itens_fatura': extrair_itens_fatura(txt, fid, id_uc),
         'impostos':     extrair_impostos(txt, fid),
-        'medicao':      extrair_medicao(txt, fid),
+        'medicao':      extrair_medicao(txt, fid, pdf_path),
     }
     _distribuir_tributos_layout_antigo(resultado, fid)
     carimbar_id_uc_competencia(resultado, id_uc, fat.get('competencia'))

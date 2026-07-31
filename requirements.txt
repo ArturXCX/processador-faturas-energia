@@ -4,5 +4,10 @@ pymupdf>=1.24
 pytesseract>=0.3.10
 pillow>=10
 openpyxl>=3.1
-pandas>=2.0
+# pandas 3 troca o dtype das colunas de texto de `object` para `str` e passa a
+# recusar gravar numero em coluna de texto. `core/hardcodes.py::_atribuir` conta
+# com o comportamento do pandas 2 (object), entao uma regra que zera uma coluna
+# textual quebra com TypeError no pandas 3 (tests/test_hardcodes.py cobre o caso).
+# Enquanto o hardcodes nao for adaptado, o build fica na serie 2.x.
+pandas>=2.0,<3
 customtkinter>=5.2
