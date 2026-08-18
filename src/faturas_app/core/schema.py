@@ -17,17 +17,18 @@ from __future__ import annotations
 BASE_SHEETS = ["fatura", "unidade_consumidora", "itens_fatura", "impostos", "medicao"]
 
 # Abas DERIVADAS (calculadas a partir das base em Dataset.to_dataframes).
-DERIVED_SHEETS = ["fatura_resumida", "medicao_resumida"]
+DERIVED_SHEETS = ["fatura_resumida", "medicao_resumida", "tarifas"]
 
 # Ordem das abas na planilha de saída (resumidas posicionadas como pedido).
 SHEET_ORDER = ["fatura_resumida", "fatura", "unidade_consumidora", "itens_fatura",
-               "impostos", "medicao", "medicao_resumida"]
+               "tarifas", "impostos", "medicao", "medicao_resumida"]
 
 # Cores (cabeçalho, linha alternada) — mesmas dos notebooks.
 SHEET_COLORS = {
     "fatura":       ("1F4E79", "BDD7EE"),
     "unidade_consumidora": ("1F4E79", "BDD7EE"),
     "itens_fatura": ("375623", "E2EFDA"),
+    "tarifas":      ("7F6000", "FFF2CC"),
     "impostos":     ("7B2C2C", "FCE4D6"),
     "medicao":      ("4A235A", "E8D5F5"),
     "fatura_resumida":   ("1F4E79", "BDD7EE"),
@@ -78,6 +79,9 @@ CANONICAL_COLUMNS = {
         "numero_dias_leitura",
         "data_proxima_leitura",
     ],
+    # Três blocos, nesta ordem: identidade extraída do PDF (razao_social..uf),
+    # cadastro vindo do dicionário oficial de UCs (core/dicionario_uc.py) e os
+    # agregados calculados em derivados.py (primeira/ultima_*).
     "unidade_consumidora": [
         "id_uc",
         "razao_social",
@@ -85,6 +89,34 @@ CANONICAL_COLUMNS = {
         "cep",
         "municipio",
         "uf",
+        "id_uc_dicionario",
+        "id_uc_dicionario_sem_format",
+        "id_uc_antigo_dicionario",
+        "id_uc_aneel_bordero",
+        "uc_operante",
+        "medidores_utilizados_dicionario",
+        "medidor_atual_dicionario",
+        "unidade_judiciaria",
+        "uj_uc_at_bt_gd",
+        "concessionaria",
+        "endereco_dicionario",
+        "comarca",
+        "grupo_fornecimento_at_bt",
+        "limite_fornecimento_tensao",
+        "possui_geracao_distribuida",
+        "participa_rateio",
+        "e_gerador_rateio",
+        "e_beneficiaria_rateio",
+        "rateio_comum",
+        "rateio_ufv_cachoeira_dourada",
+        "percentual_rateio",
+        "demanda_alterada",
+        "demanda_futura_kw",
+        "protocolo_alteracao_demanda",
+        "saldo_scee_cadastro_kwh",
+        "prioridade_rateio",
+        "gd_sem_rateio",
+        "usina_fotovoltaica_cachoeira_dourada",
         "primeira_competencia",
         "ultima_competencia",
         "primeira_fatura",
@@ -158,6 +190,19 @@ CANONICAL_COLUMNS = {
         "energia_geracao_kwh",
         "Medidor",
     ],
+    # Tabela de REFERÊNCIA (não tem id_fatura nem id_uc): 1 linha por
+    # (fornecedor, item, tarifa_unitaria_r$), na competência em que essa
+    # combinação apareceu pela primeira vez. Ver derivados._derivar_tarifas.
+    "tarifas": [
+        "fornecedor",
+        "competencia",
+        "item",
+        "tipo",
+        "unidade",
+        "preco_unitario_com_tributos_r$",
+        "tarifa_unitaria_r$",
+        "item_normalizado",
+    ],
 }
 
 # Grandeza filtrada na aba medicao_resumida e o novo nome da coluna de consumo.
@@ -169,9 +214,14 @@ MEDICAO_RESUMIDA_COL = "energia_geracao_kwh"
 #    'id_uc_sem_format', 'id_uc_atual_medidor', 'id_uc_atual_medidor_sem_format'.
 #  - Nas demais abas: apenas 'id_uc_atual' (que carrega o valor de
 #    id_uc_atual_medidor SEM formatação — o antigo 'id_uc_atual_medidor_sem_format').
+# 'id_uc_canonico' fecha os dois blocos e aparece em TODAS as abas com id_uc: é
+# a UC do dicionário oficial (que não sofre com troca de medidor nem com mudança
+# de formato do id_uc) e cai para a heurística de medidor quando o dicionário
+# não conhece a UC. Ver core/dicionario_uc.py e derivados._enriquecer_dicionario_uc.
 # 'item_normalizado' aparece logo após 'item' na aba itens_fatura.
-_EXTRAS_ID_UC_UC = ["id_uc_sem_format", "id_uc_atual_medidor", "id_uc_atual_medidor_sem_format"]
-_EXTRAS_ID_UC_OUTRAS = ["id_uc_atual"]
+_EXTRAS_ID_UC_UC = ["id_uc_sem_format", "id_uc_atual_medidor",
+                    "id_uc_atual_medidor_sem_format", "id_uc_canonico"]
+_EXTRAS_ID_UC_OUTRAS = ["id_uc_atual", "id_uc_canonico"]
 for _aba, _cols in CANONICAL_COLUMNS.items():
     if "id_uc" not in _cols:
         continue
@@ -196,6 +246,7 @@ COLS_PROTEGIDAS = {
     "id_uc_atual_medidor",
     "id_uc_atual_medidor_sem_format",
     "id_uc_atual",
+    "id_uc_canonico",
     "item_normalizado",
     "competencia",
     "demanda_contratada_kw",
@@ -206,10 +257,53 @@ COLS_PROTEGIDAS = {
     "scee_saldo_kwh_FP",
     "scee_saldo_kwh_HR",
     "energia_geracao_kwh",
+    # Cadastro vindo do dicionário oficial de UCs: protegidas para o formato da
+    # aba ficar estável entre lotes (um lote pequeno pode não ter nenhuma UC com
+    # rateio, por exemplo, e a coluna sairia vazia — mas precisa continuar lá
+    # para o remapeamento por metadados na concatenação).
+    "id_uc_dicionario",
+    "id_uc_dicionario_sem_format",
+    "id_uc_antigo_dicionario",
+    "id_uc_aneel_bordero",
+    "uc_operante",
+    "medidores_utilizados_dicionario",
+    "medidor_atual_dicionario",
+    "unidade_judiciaria",
+    "uj_uc_at_bt_gd",
+    "concessionaria",
+    "endereco_dicionario",
+    "comarca",
+    "grupo_fornecimento_at_bt",
+    "limite_fornecimento_tensao",
+    "possui_geracao_distribuida",
+    "participa_rateio",
+    "e_gerador_rateio",
+    "e_beneficiaria_rateio",
+    "rateio_comum",
+    "rateio_ufv_cachoeira_dourada",
+    "percentual_rateio",
+    "demanda_alterada",
+    "demanda_futura_kw",
+    "protocolo_alteracao_demanda",
+    "saldo_scee_cadastro_kwh",
+    "prioridade_rateio",
+    "gd_sem_rateio",
+    "usina_fotovoltaica_cachoeira_dourada",
 }
 
 # Chave usada para casar a mesma fatura entre planilha antiga e novas faturas
 # (evita duplicar uma fatura já existente ao concatenar). Vale por aba.
+#
+# 'tarifas' NÃO entra aqui de propósito: é reinstalada inteira (recalculada do
+# zero sobre o conjunto completo) em derivados.aplicar_concat, como
+# 'unidade_consumidora' — a regra "mantém a competência mais antiga" só fecha
+# olhando todas as faturas de uma vez.
+#
+# TODO (decidido para depois): 'unidade_consumidora' continua deduplicando por
+# 'id_uc', não por 'id_uc_canonico'. Migrar corrigiria a fragmentação de UCs que
+# mudaram de formato no meio do histórico, mas mudaria a CONTAGEM de linhas de
+# planilhas já publicadas/usadas em dashboards. 'id_uc_canonico' fica disponível
+# como coluna para quem quiser agrupar manualmente.
 DEDUP_KEYS = {
     "fatura":               ["id_fatura"],
     "unidade_consumidora":  ["id_uc"],

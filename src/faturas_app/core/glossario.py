@@ -36,6 +36,10 @@ ABAS_DOC = [
                             "competência e fatura). Uma linha por UC."),
     ("itens_fatura", "Itens que compõem a fatura (energia, demanda, tributos, "
                      "ajustes). Várias linhas por fatura; ver categoria 'Item de fatura'."),
+    ("tarifas", "Tabela de referência: para cada combinação de fornecedor+item+"
+                "tarifa observada em 'itens_fatura', a competência em que essa "
+                "combinação apareceu pela primeira vez (bandeira tarifária e "
+                "itens sem tarifa ficam de fora)."),
     ("impostos", "Tributos incidentes (PIS/PASEP, COFINS, ICMS) com base de "
                  "cálculo, alíquota e valor."),
     ("medicao", "Grandezas medidas (energia ativa, demanda, etc.) por posto "
@@ -82,10 +86,13 @@ COLUNAS_DOC = [
     ("fatura", "tensao_nominal_v", "Tensão nominal disponibilizada pela distribuidora, em volts."),
     ("fatura", "tensao_min_v", "Limite mínimo de tensão admitido, em volts."),
     ("fatura", "tensao_max_v", "Limite máximo de tensão admitido, em volts."),
-    ("fatura", "demanda_contratada_kw", "Demanda de potência contratada, em kW (0 quando "
-               "não há contrato de demanda). Ver 'Demanda contratada'."),
-    ("fatura", "demanda_geracao_contratada_kw", "Demanda de geração contratada, em kW "
-               "(Equatorial; 0 quando ausente)."),
+    ("fatura", "demanda_contratada_kw", "Demanda de potência contratada, em kW. "
+               "Vazio quando a fatura não traz o campo de grandezas contratadas; "
+               "0 só quando a fatura imprime esse valor explicitamente. "
+               "Ver 'Demanda contratada'."),
+    ("fatura", "demanda_geracao_contratada_kw", "Demanda de geração contratada, "
+               "em kW (Equatorial). Vazio quando a fatura não traz o campo; "
+               "0 só quando a fatura imprime esse valor explicitamente."),
     ("fatura", "perdas_transformacao_pct", "Percentual de perdas de transformação/ramal."),
     ("fatura", "scee_geracao_ciclo", "Ciclo de geração do SCEE (formato AAAA_MM), quando a "
                "UC participa do Sistema de Compensação de Energia Elétrica."),
@@ -106,6 +113,35 @@ COLUNAS_DOC = [
     ("unidade_consumidora", "cep", "CEP do endereço da UC."),
     ("unidade_consumidora", "municipio", "Município da UC."),
     ("unidade_consumidora", "uf", "Unidade da Federação (ex.: GO)."),
+    # unidade_consumidora — cadastro vindo do dicionário oficial de UCs
+    ("unidade_consumidora", "id_uc_dicionario", "UC no formato atual, segundo o dicionário oficial."),
+    ("unidade_consumidora", "id_uc_dicionario_sem_format", "Ao lado de id_uc_dicionario: sem ponto ou hífen."),
+    ("unidade_consumidora", "id_uc_antigo_dicionario", "UC no formato antigo, segundo o dicionário oficial."),
+    ("unidade_consumidora", "id_uc_aneel_bordero", "UC no formato da Resolução ANEEL nº 1095/2024 (borderô), 15 dígitos com zeros à esquerda."),
+    ("unidade_consumidora", "uc_operante", "Se a UC está operante segundo o dicionário oficial."),
+    ("unidade_consumidora", "medidores_utilizados_dicionario", "Medidores já usados por esta UC ao longo do tempo, segundo o dicionário oficial (vários, separados por '; ', quando a UC trocou de medidor)."),
+    ("unidade_consumidora", "medidor_atual_dicionario", "Medidor atualmente em uso nesta UC, segundo o dicionário oficial."),
+    ("unidade_consumidora", "unidade_judiciaria", "Unidade judiciária/administrativa atendida por esta UC."),
+    ("unidade_consumidora", "uj_uc_at_bt_gd", "Resumo Unidade Judiciária - UC - Grupo (AT/BT) - Geração Distribuída, segundo o dicionário oficial."),
+    ("unidade_consumidora", "concessionaria", "Distribuidora responsável pela UC, segundo o dicionário oficial."),
+    ("unidade_consumidora", "endereco_dicionario", "Endereço completo da UC, segundo o dicionário oficial (texto livre)."),
+    ("unidade_consumidora", "comarca", "Comarca a que pertence a UC, segundo o dicionário oficial."),
+    ("unidade_consumidora", "grupo_fornecimento_at_bt", "Grupo de fornecimento (alta ou baixa tensão), segundo o dicionário oficial."),
+    ("unidade_consumidora", "limite_fornecimento_tensao", "Faixa de tensão de fornecimento adequada para esta UC, segundo o dicionário oficial."),
+    ("unidade_consumidora", "possui_geracao_distribuida", "Se a UC possui geração distribuída (GD), segundo o dicionário oficial."),
+    ("unidade_consumidora", "participa_rateio", "Se a UC participa de algum rateio de geração distribuída, segundo o dicionário oficial."),
+    ("unidade_consumidora", "e_gerador_rateio", "Se a UC é geradora (não beneficiária) num rateio de geração distribuída."),
+    ("unidade_consumidora", "e_beneficiaria_rateio", "Se a UC é beneficiária de créditos de um rateio de geração distribuída."),
+    ("unidade_consumidora", "rateio_comum", "Se a UC participa do rateio comum (não vinculado a uma usina específica)."),
+    ("unidade_consumidora", "rateio_ufv_cachoeira_dourada", "Se a UC participa do rateio da usina fotovoltaica de Cachoeira Dourada."),
+    ("unidade_consumidora", "percentual_rateio", "Percentual de participação da UC no rateio, quando aplicável."),
+    ("unidade_consumidora", "demanda_alterada", "Se há um pedido de alteração de demanda contratada em andamento para esta UC, segundo o dicionário oficial."),
+    ("unidade_consumidora", "demanda_futura_kw", "Demanda contratada futura (kW), quando há um pedido de alteração em andamento."),
+    ("unidade_consumidora", "protocolo_alteracao_demanda", "Número do protocolo do pedido de alteração de demanda contratada, quando aplicável."),
+    ("unidade_consumidora", "saldo_scee_cadastro_kwh", "Saldo de créditos do SCEE (kWh), snapshot do dicionário oficial na última atualização (não é o saldo por fatura — ver 'fatura.scee_saldo_kwh_total')."),
+    ("unidade_consumidora", "prioridade_rateio", "Ordem de prioridade da UC no rateio de geração distribuída, quando aplicável."),
+    ("unidade_consumidora", "gd_sem_rateio", "Se a UC tem geração distribuída própria sem participar de rateio com outras UCs."),
+    ("unidade_consumidora", "usina_fotovoltaica_cachoeira_dourada", "Se esta UC É a usina fotovoltaica de Cachoeira Dourada (geradora, não beneficiária)."),
     ("unidade_consumidora", "primeira_competencia", "Competência (AAAA-MM) mais "
                "antiga com fatura para esta UC."),
     ("unidade_consumidora", "ultima_competencia", "Competência (AAAA-MM) mais recente com fatura para esta UC."),
@@ -122,6 +158,16 @@ COLUNAS_DOC = [
                "competência) e não-'NULO_' associado ao mesmo medidor."),
     ("unidade_consumidora", "id_uc_atual_medidor_sem_format", "Ao lado de id_uc_atual_medidor: "
                "o mesmo valor, sem ponto ou hífen."),
+    ("(todas)", "id_uc_canonico", "Aparece em todas as abas com id_uc: a UC segundo o "
+               "dicionário oficial (sem ponto ou hífen), que une o histórico da mesma UC "
+               "real mesmo quando o formato do id_uc mudou ao longo do tempo ou o medidor "
+               "foi trocado. Quando o dicionário não conhece a UC, cai para o id_uc "
+               "inferido pelo medidor. É a coluna recomendada para agrupar por UC."),
+    # tarifas
+    ("tarifas", "fornecedor", "Distribuidora (EQUATORIAL ou CHESP) — parte da chave que identifica cada linha, junto com item e tarifa."),
+    ("tarifas", "competencia", "Competência (AAAA-MM) em que esta combinação de fornecedor+item+tarifa apareceu pela primeira vez no acervo."),
+    ("tarifas", "item", "Nome do item de fatura (mesmo texto de itens_fatura.item)."),
+    ("tarifas", "tarifa_unitaria_r$", "Valor da tarifa sem tributos — parte da chave de deduplicação desta aba."),
     ("(todas exceto unidade_consumidora)", "competencia", "Mês de referência (AAAA-MM) da fatura da linha."),
     ("itens_fatura", "item_normalizado", "Nome padronizado do item conforme a Tabela de "
                "Equivalências (aba Parâmetros); se o item não estiver na tabela, fica igual a 'item'."),
@@ -220,6 +266,14 @@ CONCEITOS = [
     ("Energia injetada", "Energia gerada pela própria UC (ex.: solar) e injetada na rede, gerando créditos."),
     ("UFER", "Energia reativa excedente faturada (consumo de reativo acima do permitido)."),
     ("Origem da leitura", "LIDO (leitura medida) ou NÃO LIDO/ESTIMADA (quando não foi possível medir)."),
+    ("Comarca", "Circunscrição judiciária que engloba um ou mais municípios, para fins de "
+        "organização do Poder Judiciário."),
+    ("Unidade Judiciária (UJ)", "Órgão/unidade do Poder Judiciário atendido por uma Unidade "
+        "Consumidora de energia."),
+    ("Rateio", "Divisão dos créditos de energia gerados por uma usina de geração distribuída "
+        "entre várias UCs beneficiárias, conforme percentual definido."),
+    ("Resolução ANEEL nº 1095/2024", "Resolução que define o formato de agrupamento de UCs em "
+        "borderôs de pagamento — usada como um dos identificadores oficiais da UC no dicionário."),
 ]
 
 
