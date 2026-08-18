@@ -1,13 +1,22 @@
 """
-Aba 3 — Parâmetros do sistema: tabela de equivalências de itens.
+Aba 3 — Parâmetros do sistema.
 
-Tabela editável (criar/editar/excluir) com as colunas 'item' e 'item_normalizado',
-salva dentro do sistema (%APPDATA%/FaturasEnergia/). Preenche a coluna
-`item_normalizado` da aba `itens_fatura`: se o item existir aqui, usa o valor
-normalizado; senão, mantém o próprio item.
+Duas seções independentes:
+
+  1. **Tabela de equivalências de itens** — tabela editável (criar/editar/
+     excluir) com as colunas 'item' e 'item_normalizado', salva dentro do
+     sistema (%APPDATA%/FaturasEnergia/). Preenche a coluna `item_normalizado`
+     da aba `itens_fatura`: se o item existir aqui, usa o valor normalizado;
+     senão, mantém o próprio item.
+  2. **Dicionário de Unidades Consumidoras** — cadastro oficial das UCs
+     (core/dicionario_uc.py). Diferente da tabela acima, não é editável linha a
+     linha: é mantido pela fonte oficial e só precisa ser REIMPORTADO quando
+     atualizado (UC nova, medidor trocado, unidade judiciária renomeada), sem
+     exigir um build novo do aplicativo.
 """
 from __future__ import annotations
 
+import json
 import os
 import queue
 import threading
@@ -15,7 +24,7 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from ..core import equivalencias
+from ..core import dicionario_uc, equivalencias
 
 
 class AbaParametros(ctk.CTkFrame):
@@ -41,6 +50,27 @@ class AbaParametros(ctk.CTkFrame):
             row=1, column=2, padx=(0, 8))
         ctk.CTkButton(rod, text="💾  Salvar tabela", height=36, command=self._salvar).grid(
             row=1, column=3)
+
+        # ── Dicionário de Unidades Consumidoras (seção própria, acima) ──────
+        dic = ctk.CTkFrame(self, fg_color=("gray92", "gray17"))
+        dic.pack(side="top", fill="x", pady=(2, 10))
+        dic.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(dic, text="Dicionário de Unidades Consumidoras",
+                     font=ctk.CTkFont(size=15, weight="bold")).grid(
+            row=0, column=0, sticky="w", padx=10, pady=(8, 2))
+        ctk.CTkLabel(dic, justify="left", text_color=("gray40", "gray65"), wraplength=560,
+                     text=("Cadastro oficial das UCs (unidade judiciária, comarca, endereço, "
+                           "medidor atual, rateios). Preenche as colunas de cadastro da aba "
+                           "'unidade_consumidora' e a coluna 'id_uc_canonico', que une o "
+                           "histórico da mesma UC mesmo quando o número muda de formato.")).grid(
+            row=1, column=0, sticky="w", padx=10)
+        self.lbl_dicionario = ctk.CTkLabel(dic, anchor="w", justify="left",
+                                           text_color=("gray35", "gray70"))
+        self.lbl_dicionario.grid(row=2, column=0, sticky="w", padx=10, pady=(6, 10))
+        ctk.CTkButton(dic, text="⇩  Importar novo dicionário (.json)", width=260,
+                      command=self._importar_dicionario).grid(
+            row=1, column=1, rowspan=2, padx=10, pady=(0, 10))
+        self._atualizar_label_dicionario()
 
         # cabeçalho / explicação
         top = ctk.CTkFrame(self, fg_color="transparent")
@@ -108,6 +138,56 @@ class AbaParametros(ctk.CTkFrame):
             messagebox.showerror("Erro", f"Não foi possível salvar as equivalências:\n{e}")
             return
         self.lbl_status.configure(text=f"✅ {len(dados)} equivalência(s) salva(s).")
+
+    # ── dicionário de Unidades Consumidoras ──────────────────────────────
+    def _atualizar_label_dicionario(self):
+        try:
+            m = dicionario_uc.metadados()
+        except Exception as e:  # noqa: BLE001
+            self.lbl_dicionario.configure(text=f"⚠ Não foi possível ler o dicionário: {e}")
+            return
+        fonte = ("arquivo importado" if m["fonte"] == "usuario"
+                 else "versão embutida no aplicativo")
+        texto = (f"📖  {m['total_ucs']} UC(s) cadastrada(s) · {m['operantes']} operante(s) "
+                 f"· fonte: {fonte}")
+        avisos = dicionario_uc.avisos()
+        if avisos:
+            texto += f"\n⚠  {len(avisos)} aviso(s) na carga: {avisos[0]}"
+        self.lbl_dicionario.configure(text=texto)
+
+    def _importar_dicionario(self):
+        caminho = filedialog.askopenfilename(
+            title="Selecione o dicionário de Unidades Consumidoras (.json)",
+            filetypes=[("Arquivo JSON", "*.json")])
+        if not caminho:
+            return
+        try:
+            with open(caminho, "r", encoding="utf-8") as f:
+                registros = json.load(f)
+            dicionario_uc.validar_estrutura(registros)
+        except ValueError as e:
+            messagebox.showerror("Arquivo inválido", f"O arquivo não é um dicionário de UCs "
+                                                     f"válido:\n\n{e}")
+            return
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Erro", f"Não foi possível ler o arquivo:\n{e}")
+            return
+
+        atual = dicionario_uc.metadados()
+        if not messagebox.askyesno(
+                "Importar dicionário de UCs",
+                f"O dicionário atual tem {atual['total_ucs']} UC(s).\n"
+                f"O arquivo selecionado tem {len(registros)} UC(s).\n\n"
+                "O dicionário atual será substituído. Deseja prosseguir?"):
+            return
+        try:
+            m = dicionario_uc.importar(caminho)
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Erro", f"Não foi possível importar o dicionário:\n{e}")
+            return
+        self._atualizar_label_dicionario()
+        self.lbl_status.configure(
+            text=f"✅ Dicionário importado: {m['total_ucs']} UC(s) cadastrada(s).")
 
     # ── importar de um arquivo Excel/CSV ─────────────────────────────────
     def _importar(self):
