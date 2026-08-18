@@ -238,10 +238,13 @@ def extrair_fatura(texto, pdf_path, numero_forcado=None):
     tensao_max = get(r'Lim Max:\s*([\d.,]+)\s*V', texto)
 
     # ── GRANDEZAS CONTRATADAS ──────────────────────────────────────────────
+    # Sem o bloco de grandezas contratadas o campo fica NULO (não 0): zero é um
+    # valor que a fatura pode imprimir de verdade, então usá-lo como "ausente"
+    # apagaria a diferença entre "a fatura não traz o campo" e "a fatura diz 0".
     m_dem = re.search(r'DEMANDA\s*-\s*kW\s+(\d+(?:[.,]\d+)?)', texto, re.IGNORECASE)
-    demanda_cont = pf(m_dem.group(1)) if m_dem else 0.0
+    demanda_cont = pf(m_dem.group(1)) if m_dem else None
     m_dem_g = re.search(r'DEMANDA\s+GERA[ÇC][ÃA]O\s*-\s*kW\s+(\d+(?:[.,]\d+)?)', texto, re.IGNORECASE)
-    demanda_ger_cont = pf(m_dem_g.group(1)) if m_dem_g else 0.0
+    demanda_ger_cont = pf(m_dem_g.group(1)) if m_dem_g else None
 
     perdas = pf(get(r'PERDAS DE TRANSFORMA[ÇC][ÃA]O\s*/\s*RAMAL:\s*([\d.,]+)\s*%', texto))
 

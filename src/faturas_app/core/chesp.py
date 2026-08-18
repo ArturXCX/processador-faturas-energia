@@ -232,7 +232,14 @@ def extrair_fatura_chesp(texto, pdf_path):
     m_dem = re.search(r'Demanda fora ponta-kW\s+([\d.,]+)', texto, re.IGNORECASE)
     if not m_dem:
         m_dem = re.search(r'^DEMANDA\s+kW\s+([\d.,]+)', texto, re.MULTILINE | re.IGNORECASE)
-    demanda_cont = pf(m_dem.group(1)) if m_dem else 0.0
+    if not m_dem:
+        # Modelo 6 (nota antiga P&B, jan–mai/2022): o rótulo fica no cabeçalho,
+        # junto do fator de potência ("FATOR DE POT.: 99,91 / DEMANDA CONTR.: 60"),
+        # fora do bloco "GRANDEZAS CONTRATADAS" do layout colorido. O "CONTR" é o
+        # que separa esse rótulo da linha do ITEM "DEMANDA 60 18,92000 1.135,20".
+        m_dem = re.search(r'DEMANDA\s+CONTR\.?\s*:?\s*([\d.,]+)', texto, re.IGNORECASE)
+    # Ausente = NULO, não 0 (ver mesma nota em equatorial.extrair_fatura).
+    demanda_cont = pf(m_dem.group(1)) if m_dem else None
 
     m_leit = re.search(
         r'(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})\s+(\d{1,3})\s+(\d{2}/\d{2}/\d{4})',
