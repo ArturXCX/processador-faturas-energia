@@ -1,10 +1,11 @@
 # Processador de Faturas de Energia (Equatorial / CHESP)
 
 Aplicativo desktop (Windows) que converte PDFs de faturas de energia em uma
-planilha Excel com 5 abas (`fatura`, `cliente`, `itens_fatura`, `impostos`,
-`medicao`), permite editar/renomear colunas e abas, e concatenar novas faturas a
-uma planilha já existente. Distribuído como executável — o usuário final **não
-precisa de Python instalado**.
+planilha Excel estruturada (`fatura`, `unidade_consumidora`, `itens_fatura`,
+`tarifas`, `impostos`, `medicao`, as abas resumidas e o `glossario`), permite
+editar/renomear colunas e abas, e concatenar novas faturas a uma planilha já
+existente. Distribuído como executável — o usuário final **não precisa de
+Python instalado**.
 
 ## 📥 Download
 
@@ -118,10 +119,22 @@ Dois formatos de distribuição são gerados em `dist\`:
   extraídas do bloco "INFORMAÇÕES DO SCEE" (só em UCs do SCEE; vazias nas demais):
   `scee_saldo_kwh_total` (número único após "SALDO KWH:" ou o valor de "ATV:") e
   `scee_saldo_kwh_P` / `_FP` / `_HR` (formato por posto "P=…, FP=…, HR=…").
-- Abas **derivadas** (em `dataset.py`, via `BASE_SHEETS`/`DERIVED_SHEETS`):
-  - `fatura_resumida` — **primeira aba**; subconjunto de `fatura`.
+- Abas **derivadas** (via `BASE_SHEETS`/`DERIVED_SHEETS`):
+  - `fatura_resumida` — **primeira aba**; subconjunto de `fatura` (`dataset.py`).
   - `medicao_resumida` — `medicao` filtrada na grandeza `ENERGIA GERAÇÃO - KWH`,
-    com `Consumo kWh` renomeado para `energia_geracao_kwh`.
+    com `Consumo kWh` renomeado para `energia_geracao_kwh` (`dataset.py`).
+  - `tarifas` — tabela de referência com a linha do tempo das tarifas: 1 linha
+    por (`fornecedor`, `item`, `tarifa_unitaria_r$`), na competência em que a
+    combinação apareceu pela primeira vez. Bandeira tarifária e itens sem tarifa
+    ficam de fora. Calculada em `derivados.py` (precisa de `item_normalizado` e
+    de `fornecedor`, que só existem depois de `Dataset.to_dataframes()`).
+- `unidade_consumidora` traz, além do que vem do PDF, **28 colunas do dicionário
+  oficial de UCs** (unidade judiciária, comarca, endereço, medidor atual,
+  rateios…) e a coluna **`id_uc_canonico`**, que une o histórico da mesma UC real
+  mesmo quando o número muda de formato. Ver "Dicionário de UCs" abaixo.
+- `demanda_contratada_kw` / `demanda_geracao_contratada_kw` ficam **vazias**
+  quando a fatura não traz o campo de grandezas contratadas (antes gravavam `0`);
+  `0` só quando a fatura imprime esse valor.
 - Medição (Equatorial): a "Leitura Anterior" é **opcional** no parse — linhas em
   que essa célula vem vazia no PDF (ex.: `DEMANDA GERAÇÃO - KW`/`FORA PONTA`) não
   são mais perdidas.
@@ -130,6 +143,26 @@ Dois formatos de distribuição são gerados em `dist\`:
 
 Ambas as abas têm um campo "Nome do arquivo" (placeholder `faturas_energia`) que
 define o nome sugerido ao salvar.
+
+### Dicionário de Unidades Consumidoras (`core/dicionario_uc.py`)
+
+O número da UC impresso na fatura **não é estável no tempo**: o formato mudou
+historicamente (`10008414082` → `2.742.876.012-19`, mesma UC) e a reconciliação
+por medidor quebra quando a UC troca de medidor. Por isso o cadastro de UC vem
+de um **dicionário oficial** — o app extrai do PDF apenas o `id_uc` bruto (mais
+`razao_social`/`cnpj`/`cep`/`municipio`/`uf`).
+
+- Semente embutida: `src/faturas_app/resources/dicionario_uc.json` (221 UCs).
+- Atualização **sem novo build**: aba **Parâmetros → "Importar novo dicionário
+  (.json)"**, que grava em `%APPDATA%\FaturasEnergia\dicionario_uc.json` e passa
+  a valer sobre a semente.
+- Alimenta a coluna `id_uc_canonico` (em todas as abas com `id_uc`) e as 28
+  colunas de cadastro de `unidade_consumidora`.
+
+> A **demanda contratada** nunca vem do dicionário — sempre da fatura do mês.
+> O mapeamento campo→coluna é uma tabela explícita, então um dicionário futuro
+> que volte a trazer `DEMANDA CONTRATADA (kW)` tem esse campo ignorado (com
+> aviso), sem risco de duas fontes divergirem para o mesmo conceito.
 
 ### Aba de glossário (`core/glossario.py`)
 
