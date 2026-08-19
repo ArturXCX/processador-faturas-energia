@@ -67,13 +67,20 @@ Colunas-chave especiais:
   e não-`NULO_`) e **`id_uc_atual_medidor_sem_format`**, e por fim
   **`id_uc_canonico`**. **`competencia`** aparece em todas as abas exceto
   `unidade_consumidora`.
-- **`id_uc_canonico`** (todas as abas com `id_uc`): a UC segundo o **dicionário
-  oficial** (`core/dicionario_uc.py`), sem pontuação. O `id_uc` impresso não é
-  estável no tempo — o formato mudou (`10008414082` → `2.742.876.012-19`, mesma
-  UC) — e a reconciliação por medidor quebra quando a UC troca de medidor.
-  O dicionário é cadastral, então `id_uc_canonico` une o histórico completo da
-  UC real; quando a UC não está no dicionário, cai para o valor inferido pelo
-  medidor. **É a coluna recomendada para agrupar por UC** (ex.: no Power BI).
+- **`id_uc_canonico`** (todas as abas com `id_uc`): a UC identificada segundo a
+  **metodologia escolhida** pelo usuário na aba Parâmetros
+  (`dicionario_uc.modo()`, persistida em `%APPDATA%/FaturasEnergia/config_uc.json`):
+  - `MODO_DICIONARIO` (padrão): a UC do **dicionário oficial**, sem pontuação.
+    O `id_uc` impresso não é estável no tempo — o formato mudou
+    (`10008414082` → `2.742.876.012-19`, mesma UC) — e a reconciliação por
+    medidor quebra quando a UC troca de medidor. O dicionário é cadastral,
+    então une o histórico completo da UC real; UC fora do dicionário cai para o
+    valor inferido pelo medidor.
+  - `MODO_MEDIDOR`: a UC inferida pelo **medidor** (comportamento clássico,
+    para instituições sem cadastro oficial). As 28 colunas do dicionário **não
+    são criadas** e o dicionário nem é lido.
+
+  **É a coluna recomendada para agrupar por UC** (ex.: no Power BI) nas duas.
   `schema.DEDUP_KEYS["unidade_consumidora"]` continua sendo `id_uc` — migrar
   mudaria a contagem de linhas de planilhas já publicadas (decisão adiada, com
   `TODO` no `schema.py`).
@@ -127,7 +134,7 @@ src/faturas_app/
 │   ├── concat.py        concatenação com remapeamento canônico + dedup
 │   ├── links.py         gera coluna link_pdf (busca no Drive pelo nome / modelo)
 │   ├── derivados.py     colunas recalculadas do zero: unidade_consumidora.(primeira|ultima)_*, id_uc_atual_medidor(+sem_format), id_uc_canonico, medidor, item_normalizado, e a aba `tarifas` inteira
-│   ├── dicionario_uc.py cadastro OFICIAL de UCs (semente em resources/, override em %APPDATA%); resolve o id_uc em qualquer formato e alimenta id_uc_canonico + 28 colunas de unidade_consumidora
+│   ├── dicionario_uc.py cadastro OFICIAL de UCs (semente em resources/, override em %APPDATA%); resolve o id_uc em qualquer formato e alimenta id_uc_canonico + 28 colunas de unidade_consumidora. Guarda também a METODOLOGIA escolhida (modo()/definir_modo(): dicionário ou medidor)
 │   ├── equivalencias.py tabela item→item_normalizado persistida em %APPDATA%/FaturasEnergia
 │   ├── hardcodes.py     regras SE→ENTÃO do usuário (erro da concessionária), persistidas em %APPDATA%/FaturasEnergia
 │   ├── glossario.py     monta a aba glossario (docs + conceitos + itens do PDF)

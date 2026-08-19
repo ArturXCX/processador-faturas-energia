@@ -112,12 +112,20 @@ Em TODA aba com `id_uc`, logo após ele vêm sempre, nesta ordem:
 `id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format,
 id_uc_canonico` (inseridas programaticamente — ver nota abaixo).
 
-**`id_uc_canonico`** é a coluna recomendada para agrupar por UC: vem do
-**dicionário oficial** (`core/dicionario_uc.py`) e une o histórico da mesma UC
-real mesmo quando o `id_uc` mudou de formato (`10008414082` →
-`2.742.876.012-19`) ou o medidor foi trocado — casos em que
-`id_uc_atual_medidor` (heurística por medidor, mantida como está) falha. Quando
-a UC não está no dicionário, cai para o valor inferido pelo medidor.
+**`id_uc_canonico`** é a coluna recomendada para agrupar por UC. O que ela
+contém depende da **metodologia escolhida** na aba Parâmetros
+(`dicionario_uc.modo()`, persistida em `%APPDATA%\FaturasEnergia\config_uc.json`):
+
+- **`MODO_DICIONARIO`** (padrão): vem do **dicionário oficial**
+  (`core/dicionario_uc.py`) e une o histórico da mesma UC real mesmo quando o
+  `id_uc` mudou de formato (`10008414082` → `2.742.876.012-19`) ou o medidor foi
+  trocado — casos em que `id_uc_atual_medidor` falha. UC fora do dicionário cai
+  para o valor inferido pelo medidor.
+- **`MODO_MEDIDOR`**: comportamento CLÁSSICO, para instituições sem cadastro
+  oficial — `id_uc_canonico` recebe o valor inferido pelo medidor e **as 28
+  colunas do dicionário não são criadas**. O dicionário nem é lido.
+
+`id_uc_atual_medidor` (heurística por medidor) é mantido como está nas duas.
 
 **fatura**: id_fatura, numero_fatura, arquivo_pdf, link_pdf, fornecedor, id_uc,
 id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format, medidor,
@@ -321,6 +329,19 @@ Reverter: extraia o `.zip` por cima de `app_faturas`.
   99,86%+ EQ reconciliadas.
 - **FATURAS_SELFCHECK** é o arquivo de SAÍDA do relatório (o app ESCREVE nele) —
   nunca apontar para um arquivo que não possa ser sobrescrito.
+- **Pós-processamento NÃO roda na thread da interface.** `to_dataframes` +
+  `derivados` + `hardcodes` + `Perfil` são proporcionais ao LOTE inteiro: com
+  10 mil faturas isso levava minutos e, rodando na thread do Tk, a janela
+  parava de responder logo após o último PDF — parecia travamento no último
+  arquivo, mas era o laço de eventos bloqueado. Fica em thread própria
+  (`tab_processar._pos_processar`); não voltar a chamar direto do `_poll`.
+- **Consulta ao dicionário é por id_uc DISTINTO, não por linha.** São ~400 UCs
+  para dezenas de milhares de linhas; consultar por linha dominava o tempo do
+  pós-processamento.
+- **Texto colado no fim da linha de medição** (Equatorial): o pdfplumber gruda
+  texto legal ("CONFORME REN. ANEEL 414/10.") no fim da linha. Por isso os
+  padrões de linha truncada usam um lookahead "não vem outro número depois"
+  (`FIM`) em vez de âncora de fim de linha — não voltar a usar `$` ali.
 
 ---
 

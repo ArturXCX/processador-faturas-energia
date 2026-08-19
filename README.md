@@ -144,13 +144,26 @@ Dois formatos de distribuição são gerados em `dist\`:
 Ambas as abas têm um campo "Nome do arquivo" (placeholder `faturas_energia`) que
 define o nome sugerido ao salvar.
 
-### Dicionário de Unidades Consumidoras (`core/dicionario_uc.py`)
+### Identificação das Unidades Consumidoras (`core/dicionario_uc.py`)
+
+Há **duas metodologias**, escolhidas na aba **Parâmetros** (a escolha fica
+salva). Existem porque um dicionário oficial é o cadastro de **uma**
+instituição — sem essa opção, o app só serviria para ela:
+
+| Metodologia | Como identifica a UC | Cadastro |
+|---|---|---|
+| **Com dicionário (JSON)** | `id_uc_canonico` = UC do cadastro oficial | 28 colunas vindas do JSON |
+| **Sem dicionário (pelo medidor)** | `id_uc_canonico` = UC inferida pelo **medidor** | só o que vem do PDF |
+
+Na metodologia **sem dicionário** (comportamento clássico do app) as 28 colunas
+de cadastro **não são criadas** — a planilha não vem cheia de coluna vazia de um
+cadastro que não é da sua instituição.
 
 O número da UC impresso na fatura **não é estável no tempo**: o formato mudou
 historicamente (`10008414082` → `2.742.876.012-19`, mesma UC) e a reconciliação
-por medidor quebra quando a UC troca de medidor. Por isso o cadastro de UC vem
-de um **dicionário oficial** — o app extrai do PDF apenas o `id_uc` bruto (mais
-`razao_social`/`cnpj`/`cep`/`municipio`/`uf`).
+por medidor quebra quando a UC troca de medidor. É esse problema que a
+metodologia **com dicionário** resolve — o app extrai do PDF apenas o `id_uc`
+bruto (mais `razao_social`/`cnpj`/`cep`/`municipio`/`uf`).
 
 - Semente embutida: `src/faturas_app/resources/dicionario_uc.json` (221 UCs).
 - Atualização **sem novo build**: aba **Parâmetros → "Importar novo dicionário
