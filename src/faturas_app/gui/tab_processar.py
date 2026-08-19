@@ -9,6 +9,8 @@ editor de colunas rola internamente quando há muitas colunas.
 from __future__ import annotations
 
 import os
+import queue
+import threading
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
@@ -135,7 +137,7 @@ class AbaProcessar(ctk.CTkFrame):
                 if not ok:
                     self.progresso.escrever(f"⚠ ERRO [{forn}] {nome}: {msg}")
             elif tipo == "concluido":
-                self._concluir(payload)
+                self._pos_processar(payload)
                 return
             elif tipo == "falha":
                 self.btn_processar.configure(state="normal")
@@ -145,23 +147,64 @@ class AbaProcessar(ctk.CTkFrame):
         if self.worker.ativo():
             self.after(120, self._poll)
 
-    def _concluir(self, resultado):
+    def _pos_processar(self, resultado):
+        """
+        Monta os DataFrames e aplica derivadas/hardcodes em uma THREAD, não na
+        thread da interface.
+
+        Esse trabalho é proporcional ao TOTAL de faturas do lote (não a um
+        arquivo), então num lote grande — 10 mil faturas, ~70 mil linhas de
+        itens — ele levava minutos. Rodando na thread da interface, a janela
+        parava de responder logo depois do último PDF e o Windows a marcava
+        como "Não Responde": parecia um travamento no último arquivo, mas era o
+        pós-processamento bloqueando o laço de eventos do Tk.
+        """
+        self.progresso.habilitar_cancelar(False)
+        self.progresso.escrever(
+            "Consolidando os dados do lote (colunas derivadas, tarifas, "
+            "hardcodes)… isso pode levar alguns minutos em lotes grandes.")
+        fila: queue.Queue = queue.Queue()
+
+        def trabalho():
+            try:
+                ds: Dataset = resultado.dataset
+                dfs = ds.to_dataframes()
+                modo, template = self._link_cfg
+                dfs["fatura"] = links.aplicar_link(dfs["fatura"], modo, template)
+                derivados.aplicar(dfs)
+                rel_hc = hardcodes.aplicar_dfs(dfs)
+                perfil = Perfil.padrao_de_dataframes(dfs)
+                fila.put(("ok", (dfs, rel_hc, perfil)))
+            except Exception as e:  # noqa: BLE001
+                fila.put(("erro", e))
+
+        # A configuração do link é lida AQUI (thread da interface): ler widget
+        # Tk de outra thread não é seguro.
+        self._link_cfg = self.seletor_link.config()
+        threading.Thread(target=trabalho, daemon=True).start()
+        self._poll_pos(resultado, fila)
+
+    def _poll_pos(self, resultado, fila):
+        try:
+            tipo, payload = fila.get_nowait()
+        except queue.Empty:
+            self.after(150, lambda: self._poll_pos(resultado, fila))
+            return
+        self.btn_processar.configure(state="normal")
+        if tipo == "erro":
+            self.progresso.escrever(f"⚠ ERRO ao consolidar: {payload}")
+            messagebox.showerror("Erro", f"Falha ao consolidar os dados:\n{payload}")
+            return
+        dfs, rel_hc, perfil = payload
+        self.dfs_canon = dfs
+        self.perfil = perfil
+        self._concluir(resultado, rel_hc)
+
+    def _concluir(self, resultado, rel_hc):
         self.btn_processar.configure(state="normal")
         self.progresso.habilitar_cancelar(False)
         self._erros = resultado.erros
         ds: Dataset = resultado.dataset
-        self.dfs_canon = ds.to_dataframes()
-        # Gera a coluna link_pdf conforme o modo escolhido (caminho/busca/modelo).
-        modo, template = self.seletor_link.config()
-        self.dfs_canon["fatura"] = links.aplicar_link(self.dfs_canon["fatura"], modo, template)
-
-        # Colunas derivadas (ex.: cliente.ultima_competencia/ultima_fatura).
-        derivados.aplicar(self.dfs_canon)
-
-        # Hardcodes do usuário: sempre por ÚLTIMO, sobre os dados já completos.
-        rel_hc = hardcodes.aplicar_dfs(self.dfs_canon)
-
-        self.perfil = Perfil.padrao_de_dataframes(self.dfs_canon)
 
         n_fat = ds.total_faturas()
         n_err = len(resultado.erros)

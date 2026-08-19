@@ -977,6 +977,21 @@ def extrair_medicao(texto, id_fatura, pdf_path=None):
     # ponto (a grandeza começa por letra, nunca por dígito), então a captura é
     # idêntica à de antes.
     SEP = rf'{H}*'
+    # FIM DA LINHA DE MEDIÇÃO, para os padrões de linha TRUNCADA (pat_c/pat_d/
+    # pat_f/pat_h). Antes era `{H}*$`, o que exigia que a linha acabasse ali.
+    # O que esses padrões realmente precisam garantir é outra coisa: que NÃO
+    # venha mais um NÚMERO depois (é o número a mais que caracteriza a linha
+    # completa, tratada por pat_a/pat_b). Exigir fim de linha era forte demais
+    # porque o pdfplumber às vezes cola texto legal da fatura no fim da linha
+    # de medição. Casos reais (2022, faturas ENEL/Equatorial de baixa tensão):
+    #     1200764-1 ENERGIA ATIVA - KWH ÚNICO 24,000000 CONFORME REN. ANEEL 414/10.
+    #     1200507-0 ENERGIA ATIVA - KWH ÚNICO 26936 40,000000 CONFORME REN. ANEEL 414/10.
+    # Nesses casos a linha existia, era truncada, e simplesmente não casava com
+    # nenhum padrão — a fatura inteira saía sem medição.
+    #
+    # A exclusividade em relação a pat_a/pat_b é preservada exatamente: uma
+    # linha completa tem um número logo após, e o lookahead a rejeita.
+    FIM = rf'(?!{H}*[\d.,])'
     pat_a = re.compile(
         rf'^{GRANDEZA}{H}+{POSTO}{H}+(\d+)(?:{H}+(\d+))?{H}+{CONST}{H}+([\d.,]+){H}+(\d+-?\d*)',
         re.IGNORECASE | re.MULTILINE)
@@ -991,7 +1006,7 @@ def extrair_medicao(texto, id_fatura, pdf_path=None):
     # 530341 0,375000") gravava Const Medidor = 530341 (a leitura atual) e
     # Consumo kWh = 0,375 (a constante real).
     pat_d = re.compile(
-        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+(\d+){H}+{CONST}{H}*$',
+        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+(\d+){H}+{CONST}{FIM}',
         re.IGNORECASE | re.MULTILINE)
     # Linha TRUNCADA: o PDF imprime medidor, grandeza, posto, UMA leitura e a
     # constante, e acaba — a coluna de consumo não existe naquela linha. Ex.:
@@ -1001,20 +1016,20 @@ def extrair_medicao(texto, id_fatura, pdf_path=None):
     # este padrão exclusivo das linhas truncadas: uma linha completa sempre tem
     # mais um número depois da constante e é capturada pelo pat_b.
     pat_c = re.compile(
-        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+{CONST}{H}*$',
+        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+(\d+){H}+{CONST}{FIM}',
         re.IGNORECASE | re.MULTILINE)
     # Linha SEM nenhuma leitura (faturamento por média/mínimo: não há leitura
     # real do medidor naquele mês — só a constante, fixa, continua impressa).
     # Caso real: 2024012783899.pdf ("10831393-0 ENERGIA ATIVA - KWH ÚNICO
     # 1,000000").
     pat_f = re.compile(
-        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+{CONST}{H}*$',
+        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+{CONST}{FIM}',
         re.IGNORECASE | re.MULTILINE)
     # Linha totalmente em branco: só medidor/grandeza/posto, sem nenhum
     # número (nem leitura, nem constante, nem consumo). Caso real:
     # 2022036945790.pdf ("12974430-1 ENERGIA GERAÇÃO - KWH RESERVADO").
     pat_h = re.compile(
-        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}*$',
+        rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{FIM}',
         re.IGNORECASE | re.MULTILINE)
     # Linha TRUNCADA no layout do pat_a (medidor à DIREITA): o PDF imprime
     # grandeza, posto, UMA leitura, a constante e o medidor — as colunas

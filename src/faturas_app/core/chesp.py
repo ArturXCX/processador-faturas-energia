@@ -743,8 +743,14 @@ def extrair_medicao_chesp(texto, id_fatura):
     # Nº 183776 ('Ãšnico'). Como nenhum outro posto termina em 'ico', aceitar
     # um token curto sem espaço/dígito terminado em 'ico' cobre todas as
     # variantes; `_padronizar_medicao_chesp` normaliza tudo para 'ÚNICO'.
+    #
+    # O prefixo é `{0,6}`, NÃO `{1,6}`: quando o PDF perde o acento inteiro
+    # sobra o token 'ico' PURO, sem nenhum caractere antes, e com `{1,6}` a
+    # linha não casava — a fatura saía sem medição nenhuma. Casos reais:
+    # FATURA Nº 1327044/1327045 (set/2024) e Nº 1373790/1373791 (out/2024),
+    # todas com "Energia Ativa-kWh ico 46159 48905 1 2746".
     POSTO = (r'(Ponta|Fora Ponta|Fora\s*[Pp]onta|Reservado|Unico|Único|'
-             r'[^\s\d]{1,6}ico)')
+             r'[^\s\d]{0,6}ico)')
 
     pat = re.compile(
         rf'^(\d+)\s+{GRANDEZA}\s+{POSTO}\s+'
@@ -774,7 +780,75 @@ def extrair_medicao_chesp(texto, id_fatura):
         # outros dois desenhos de tabela. Rodar apenas no vazio garante que
         # nenhuma fatura que já era extraída corretamente mude de resultado.
         medicao = _medicao_layouts_antigos(texto, id_fatura)
+    if not medicao:
+        # Último recurso, pela mesma regra do "só no vazio": faturas ESCANEADAS
+        # em que o OCR trocou dígitos por letras parecidas na própria tabela.
+        medicao = _medicao_ocr_tolerante(texto, id_fatura, GRANDEZA, POSTO)
     _padronizar_medicao_chesp(medicao)
+    return medicao
+
+
+# Trocas que o OCR faz na tabela de medição de faturas escaneadas, todas
+# confirmadas em fatura real. Aplicadas SOMENTE aos tokens das quatro colunas
+# numéricas, e somente quando a fatura não rendeu nenhuma linha pelos caminhos
+# normais — nunca sobre o texto inteiro (o número da nota, a chave de acesso e
+# os valores em R$ não passam por aqui).
+_OCR_DIGITOS = str.maketrans({'O': '0', 'o': '0', 'B': '8', 'l': '1', 'I': '1',
+                              '|': '1', 'S': '5', 'Z': '2'})
+
+
+def _medicao_ocr_tolerante(texto, id_fatura, grandeza_re, posto_re):
+    """
+    Recupera a tabela de medição quando o OCR corrompeu DÍGITOS das colunas
+    numéricas. Caso real (FATURA Nº 339374.pdf, out/2022, escaneada):
+
+        1194809 Energia Ativa-kWh AÁsnico 6269 B414 1 2145
+        1194809 Energia Reativa-kVArh A&nico o o 1 o C72E.8377.6B9F...
+
+    'B414' é 8414 e cada 'o' é um zero; como `[\\d.,]+` não casa com letra, a
+    linha inteira era perdida e a fatura saía sem medição.
+
+    Um token só é aceito se, DEPOIS da troca, sobrar um número — se restar
+    qualquer outro caractere, a linha é descartada em vez de virar dado
+    inventado. A linha também é descartada quando a "leitura atual" parece um
+    pedaço da chave de acesso (4+ hexadecimais seguidos), mesma proteção do
+    caminho normal.
+    """
+    TOK = r'[\dOoBlI|SZ.,]{1,12}'
+    pat = re.compile(
+        rf'^(\d+)\s+{grandeza_re}\s+{posto_re}\s+'
+        rf'({TOK})\s+({TOK})\s+({TOK})\s+({TOK})',
+        re.IGNORECASE | re.MULTILINE)
+
+    def _num(tok):
+        """Token OCR -> número, ou None se não for um número depois da troca."""
+        limpo = tok.translate(_OCR_DIGITOS)
+        if not re.fullmatch(r'[\d.,]+', limpo):
+            return None
+        return limpo
+
+    medicao = []
+    seen = set()
+    for m in pat.finditer(texto):
+        if re.search(r'[A-F]{4}', m.group(5)):
+            continue
+        campos = [_num(m.group(i)) for i in (4, 5, 6, 7)]
+        if any(c is None for c in campos):
+            continue
+        ant, atual, const, consumo = campos
+        linha = {'id_fatura':        id_fatura,
+                 'Grandezas':        m.group(2),
+                 'Postos horarios':  re.sub(r'\s+', ' ', m.group(3)).title(),
+                 'Leitura Anterior': int(re.sub(r'\D', '', ant)),
+                 'Leitura Atual':    int(re.sub(r'\D', '', atual)),
+                 'Const Medidor':    pf(const),
+                 'Consumo kWh':      pf(consumo),
+                 'Medidor':          m.group(1)}
+        key = tuple(v for k, v in linha.items() if k != 'id_fatura')
+        if key in seen:
+            continue
+        seen.add(key)
+        medicao.append(linha)
     return medicao
 
 

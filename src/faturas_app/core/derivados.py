@@ -180,17 +180,36 @@ def _enriquecer_dicionario_uc(dfs: dict) -> None:
         um cadastro redundante repetido por linha.
 
     Precisa rodar DEPOIS de `_colunas_medidor` (usa suas colunas como fallback).
+
+    Respeita a metodologia escolhida pelo usuário (`dicionario_uc.modo()`): em
+    MODO_MEDIDOR o dicionário não é consultado, `id_uc_canonico` recebe o valor
+    da heurística de medidor e as colunas cadastrais NÃO são criadas — é o
+    comportamento clássico, para instituições que não têm um cadastro oficial.
     """
+    usar_dicionario = dicionario_uc.ativo()
     for aba, df in dfs.items():
         if df is None or df.empty or "id_uc" not in df.columns:
             continue
-        campos = df["id_uc"].map(dicionario_uc.campos_unidade_consumidora)
-        canonico_dicionario = campos.map(
-            lambda c: c.get("id_uc_dicionario_sem_format") if c else None)
+        if not usar_dicionario:
+            fallback = (df.get("id_uc_atual_medidor_sem_format")
+                        if aba == "unidade_consumidora" else df.get("id_uc_atual"))
+            if fallback is not None:
+                df["id_uc_canonico"] = fallback
+            continue
+        # Consulta o dicionário uma vez por id_uc DISTINTO, não por linha: são
+        # ~400 UCs para dezenas de milhares de linhas em itens_fatura/medicao,
+        # e cada consulta monta um dict de 28 campos. Sem isso, o
+        # pós-processamento de um lote grande (10 mil faturas) levava minutos.
+        unicos = {v: dicionario_uc.campos_unidade_consumidora(v)
+                  for v in df["id_uc"].unique()}
+        canonico_dicionario = df["id_uc"].map(
+            {k: (c.get("id_uc_dicionario_sem_format") if c else None)
+             for k, c in unicos.items()})
         if aba == "unidade_consumidora":
             fallback = df.get("id_uc_atual_medidor_sem_format")
             for col in dicionario_uc.COLUNAS_UNIDADE_CONSUMIDORA:
-                df[col] = campos.map(lambda c, col=col: c.get(col) if c else None)
+                df[col] = df["id_uc"].map(
+                    {k: (c.get(col) if c else None) for k, c in unicos.items()})
         else:
             fallback = df.get("id_uc_atual")
         if fallback is None:

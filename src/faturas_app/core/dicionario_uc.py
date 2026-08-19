@@ -101,6 +101,31 @@ COLUNAS_UNIDADE_CONSUMIDORA = [
 ]
 
 _NOME_ARQUIVO = "dicionario_uc.json"
+_NOME_CONFIG = "config_uc.json"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Metodologia de identificação da Unidade Consumidora
+# ──────────────────────────────────────────────────────────────────────────────
+# O dicionário oficial é um cadastro de UMA instituição (no caso, o TJGO). Um
+# app que dependesse SÓ dele não serviria para nenhuma outra instituição, cujas
+# UCs não estão nesse arquivo. Por isso a metodologia é escolhida pelo usuário:
+#
+#   MODO_DICIONARIO — o cadastro (endereço, unidade judiciária, medidor atual,
+#       rateios…) vem do JSON oficial, e `id_uc_canonico` é a UC do dicionário.
+#       Resolve a instabilidade do id_uc ao longo do tempo (mudança de formato)
+#       e a troca de medidor.
+#   MODO_MEDIDOR — comportamento CLÁSSICO, que não depende de cadastro nenhum:
+#       tudo vem do PDF e a reconciliação entre UCs é feita pelo MEDIDOR
+#       (id_uc_atual_medidor). `id_uc_canonico` recebe esse mesmo valor e as
+#       colunas cadastrais do dicionário não são criadas.
+MODO_DICIONARIO = "dicionario"
+MODO_MEDIDOR = "medidor"
+MODOS = (MODO_DICIONARIO, MODO_MEDIDOR)
+
+# Padrão: dicionário. Mantém o comportamento de quem já usa o app com o cadastro
+# do TJGO; quem não tem um JSON troca uma vez na aba Parâmetros e a escolha fica
+# salva. Em MODO_MEDIDOR o dicionário nem é lido.
+MODO_PADRAO = MODO_DICIONARIO
 
 # Cache em memória (invalidado por `recarregar()`), no mesmo espírito de
 # `correcoes._dados()`: {"registros", "indice", "avisos", "fonte", "arquivo"}.
@@ -123,6 +148,41 @@ def _dir_usuario() -> Path:
 def arquivo_usuario() -> Path:
     """Caminho do override do usuário (pode não existir)."""
     return _dir_usuario() / _NOME_ARQUIVO
+
+
+def _arquivo_config() -> Path:
+    return _dir_usuario() / _NOME_CONFIG
+
+
+def modo() -> str:
+    """Metodologia escolhida: MODO_DICIONARIO ou MODO_MEDIDOR."""
+    try:
+        cfg = json.loads(_arquivo_config().read_text(encoding="utf-8"))
+        m = cfg.get("modo_identificacao_uc")
+        if m in MODOS:
+            return m
+    except Exception:
+        pass
+    return MODO_PADRAO
+
+
+def definir_modo(novo: str) -> None:
+    """Grava a metodologia escolhida (persistida entre execuções)."""
+    if novo not in MODOS:
+        raise ValueError(f"Metodologia desconhecida: {novo!r}")
+    cfg = {}
+    try:
+        cfg = json.loads(_arquivo_config().read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    cfg["modo_identificacao_uc"] = novo
+    _arquivo_config().write_text(
+        json.dumps(cfg, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def ativo() -> bool:
+    """O cadastro do dicionário deve ser usado neste processamento?"""
+    return modo() == MODO_DICIONARIO
 
 
 def _so_digitos(v):

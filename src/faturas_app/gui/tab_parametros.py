@@ -28,6 +28,9 @@ from ..core import dicionario_uc, equivalencias
 
 
 class AbaParametros(ctk.CTkFrame):
+    _ROTULO_DIC = "Com dicionário (JSON)"
+    _ROTULO_MED = "Sem dicionário (pelo medidor)"
+
     def __init__(self, master):
         super().__init__(master, fg_color="transparent")
         self.linhas: list[tuple] = []   # (frame, entry_item, entry_norm)
@@ -59,17 +62,27 @@ class AbaParametros(ctk.CTkFrame):
                      font=ctk.CTkFont(size=15, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=10, pady=(8, 2))
         ctk.CTkLabel(dic, justify="left", text_color=("gray40", "gray65"), wraplength=560,
-                     text=("Cadastro oficial das UCs (unidade judiciária, comarca, endereço, "
-                           "medidor atual, rateios). Preenche as colunas de cadastro da aba "
-                           "'unidade_consumidora' e a coluna 'id_uc_canonico', que une o "
-                           "histórico da mesma UC mesmo quando o número muda de formato.")).grid(
+                     text=("Como as Unidades Consumidoras são identificadas e de onde vêm "
+                           "os dados de cadastro. Escolha 'Sem dicionário' se a sua "
+                           "instituição não tem um arquivo de cadastro oficial.")).grid(
             row=1, column=0, sticky="w", padx=10)
+
+        self.opt_metodo = ctk.CTkSegmentedButton(
+            dic, values=[self._ROTULO_DIC, self._ROTULO_MED],
+            command=self._trocar_metodo)
+        self.opt_metodo.grid(row=2, column=0, sticky="w", padx=10, pady=(8, 2))
+        self.opt_metodo.set(self._ROTULO_DIC if dicionario_uc.ativo() else self._ROTULO_MED)
+
+        self.lbl_metodo = ctk.CTkLabel(dic, anchor="w", justify="left", wraplength=560,
+                                       text_color=("gray40", "gray65"))
+        self.lbl_metodo.grid(row=3, column=0, sticky="w", padx=10)
         self.lbl_dicionario = ctk.CTkLabel(dic, anchor="w", justify="left",
                                            text_color=("gray35", "gray70"))
-        self.lbl_dicionario.grid(row=2, column=0, sticky="w", padx=10, pady=(6, 10))
-        ctk.CTkButton(dic, text="⇩  Importar novo dicionário (.json)", width=260,
-                      command=self._importar_dicionario).grid(
-            row=1, column=1, rowspan=2, padx=10, pady=(0, 10))
+        self.lbl_dicionario.grid(row=4, column=0, sticky="w", padx=10, pady=(6, 10))
+        self.btn_importar_dic = ctk.CTkButton(
+            dic, text="⇩  Importar novo dicionário (.json)", width=260,
+            command=self._importar_dicionario)
+        self.btn_importar_dic.grid(row=2, column=1, rowspan=3, padx=10, pady=(0, 10))
         self._atualizar_label_dicionario()
 
         # cabeçalho / explicação
@@ -140,7 +153,35 @@ class AbaParametros(ctk.CTkFrame):
         self.lbl_status.configure(text=f"✅ {len(dados)} equivalência(s) salva(s).")
 
     # ── dicionário de Unidades Consumidoras ──────────────────────────────
+    def _trocar_metodo(self, rotulo):
+        novo = (dicionario_uc.MODO_DICIONARIO if rotulo == self._ROTULO_DIC
+                else dicionario_uc.MODO_MEDIDOR)
+        try:
+            dicionario_uc.definir_modo(novo)
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Erro", f"Não foi possível salvar a escolha:\n{e}")
+            return
+        self._atualizar_label_dicionario()
+        self.lbl_status.configure(
+            text=f"✅ Metodologia de identificação de UC: {rotulo}.")
+
     def _atualizar_label_dicionario(self):
+        usando = dicionario_uc.ativo()
+        self.lbl_metodo.configure(text=(
+            "As colunas de cadastro (unidade judiciária, comarca, endereço, medidor "
+            "atual, rateios) vêm do dicionário, e 'id_uc_canonico' usa a UC oficial — "
+            "o que une o histórico da mesma UC mesmo quando o número muda de formato."
+            if usando else
+            "Nada vem de cadastro externo: os dados da UC saem dos próprios PDFs e a "
+            "correspondência entre faturas da mesma UC é feita pelo MEDIDOR. "
+            "'id_uc_canonico' recebe esse valor e as colunas do dicionário não são "
+            "criadas na planilha."))
+        # O bloco do dicionário só faz sentido na metodologia com JSON.
+        self.btn_importar_dic.configure(state="normal" if usando else "disabled")
+        if not usando:
+            self.lbl_dicionario.configure(
+                text="📖  Dicionário desativado nesta metodologia.")
+            return
         try:
             m = dicionario_uc.metadados()
         except Exception as e:  # noqa: BLE001
