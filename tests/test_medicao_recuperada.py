@@ -127,6 +127,39 @@ def test_nao_inventa_linha_juntando_duas():
         "ENERGIA ATIVA - KWH", "ENERGIA REATIVA - KWH"}
 
 
+# ── Equatorial: layout "DESCRITIVA" (grandeza 'CONSUMO') ─────────────────────
+def test_layout_descritiva_grandeza_consumo():
+    """
+    'FATURA UC 10024519241 - DESCRITIVA.pdf' (jan/2022) — fatura simples de
+    baixa tensão cuja grandeza é 'CONSUMO', sem sufixo. Não estava na lista de
+    grandezas e a fatura saía sem medição nenhuma.
+    """
+    txt = "11767682-9CONSUMO ÚNICO 47840 48310 1,000000 470\n"
+    linhas = _med(txt)
+    assert len(linhas) == 1
+    assert _campos(linhas[0]) == (
+        "CONSUMO", "ÚNICO", 47840, 48310, 1.0, 470.0, "11767682-9")
+
+
+def test_linha_de_item_consumo_nao_vira_medicao():
+    """
+    REGRESSÃO (o risco de aceitar 'CONSUMO' como grandeza): a MESMA fatura tem
+    uma LINHA DE ITEM chamada 'CONSUMO'. Ela não pode virar linha de medição —
+    o que a separa é o posto horário, que a linha de item não tem.
+    """
+    txt = ("CONSUMO - kWh 470,00 0,650560 305,76 1456,15\n"
+           "ADC BANDEIRA VERMELHA - kWh 470,00 0,145040 68,16\n")
+    assert _med(txt) == []
+
+
+def test_consumo_nao_engole_grandeza_mais_especifica():
+    """REGRESSÃO: 'CONSUMO' é a última alternativa e não atrapalha as demais."""
+    txt = ("11767682-9 ENERGIA ATIVA - KWH ÚNICO 100 200 1,000000 100\n"
+           "11767682-9 DEMANDA - KW PONTA 300 400 0,048000 100\n")
+    linhas = _med(txt)
+    assert [l["Grandezas"] for l in linhas] == ["ENERGIA ATIVA - KWH", "DEMANDA - KW"]
+
+
 # ── CHESP: posto horário corrompido ──────────────────────────────────────────
 def test_chesp_posto_ico_puro():
     """FATURA Nº 1327044 — 'Único' virou só 'ico', sem nenhum prefixo."""

@@ -810,10 +810,17 @@ def extrair_impostos(texto, id_fatura):
 # 5. MEDIÇÃO
 # ──────────────────────────────────────────────────────────────────────────────
 # mais longas primeiro; REATIVA e UFER GERAÇÃO só existem no layout antigo
+# 'CONSUMO' (sem sufixo) é a grandeza do layout "DESCRITIVA" — fatura simples de
+# baixa tensão, ex.: "FATURA UC 10024519241 - DESCRITIVA.pdf" (jan/2022), cuja
+# linha de medição é "11767682-9CONSUMO ÚNICO 47840 48310 1,000000 470". Sem
+# essa alternativa a fatura saía sem medição nenhuma.
+# Fica por ÚLTIMO na alternância e não conflita com a LINHA DE ITEM homônima
+# ("CONSUMO - kWh 470,00 0,650560 305,76"), porque todo padrão de medição exige
+# um POSTO HORÁRIO logo depois da grandeza — e a linha de item não tem posto.
 _GRANDEZA_MED = (r'(ENERGIA REATIVA GERA[ÇC][ÃA]O - KWH|ENERGIA REATIVA - KWH'
                  r'|ENERGIA GERA[ÇC][ÃA]O - KWH|ENERGIA ATIVA - KWH'
                  r'|DEMANDA GERA[ÇC][ÃA]O - KW|DEMANDA - KW'
-                 r'|UFER GERA[ÇC][ÃA]O|UFER|DMCR)')
+                 r'|UFER GERA[ÇC][ÃA]O|UFER|DMCR|CONSUMO)')
 _POSTO_MED = r'(PONTA|FORA PONTA|RESERVADO|INTERMEDI[ÁA]RIO|[ÚU]NICO)'
 
 
