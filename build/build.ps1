@@ -52,7 +52,6 @@ Write-Host "==> Conferindo se o pacote esta autossuficiente..."
 $obrigatorios = @(
   "_internal\tesseract\tesseract.exe",
   "_internal\tesseract\tessdata\por.traineddata",
-  "_internal\faturas_app\resources\dicionario_uc.json",
   "_internal\faturas_app\resources\glossario_itens.json",
   "_internal\app.ico"
 )

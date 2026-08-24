@@ -237,26 +237,6 @@ def _extrair_resumo(doc):
 # --------------------------------------------------------------------------- #
 # Cabeçalho / âncoras de conferência
 # --------------------------------------------------------------------------- #
-def _parse_nome(nome: str):
-    """Deriva metadados confiáveis do nome do arquivo (muito padronizado)."""
-    m = re.search(r"(4000000225\d{9})", nome)
-    numero = m.group(1) if m else ""
-    up = nome.upper()
-    distribuidora = "EQUATORIAL" if "EQUATORIAL" in up else ("ENEL" if "ENEL" in up else "")
-    competencia = ""
-    if numero:
-        mes, ano = int(numero[10:13]), numero[13:17]
-        competencia = f"{mes:02d}/{ano}"
-    vencimento = ""
-    mv = re.search(r"VENC\.?\s*(\d{2})\.(\d{2})\.(\d{2,4})", nome)
-    if mv:
-        dd, mm, yy = mv.groups()
-        if len(yy) == 2:
-            yy = "20" + yy
-        vencimento = f"{dd}/{mm}/{yy}"
-    return numero, distribuidora, competencia, vencimento
-
-
 def _anchor_total(full: str):
     """TOTAL impresso (o valor líquido do agrupamento)."""
     total = None
@@ -298,6 +278,181 @@ def _cod_agrupamento(full: str):
 
 
 # --------------------------------------------------------------------------- #
+# Identidade do borderô (número, agrupamento, competência, vencimento)
+# --------------------------------------------------------------------------- #
+# Antes tudo isso vinha do NOME DO ARQUIVO, com o prefixo `4000000225` — o
+# código de agrupamento do TJGO — escrito no regex. Bastava renomear o PDF (ou
+# ser de outra instituição) para o borderô ficar sem identidade nenhuma.
+#
+# Agora a fonte é o CONTEÚDO do PDF, que traz tudo impresso no cabeçalho:
+#
+#   EQUATORIAL            ENEL/CELG (rótulos e valores em linhas separadas)
+#   ----------            ---------------------------------------------------
+#   0022500               NÚMERO DA FATURA AGRUPADA
+#   08/2024               4000000225001202200
+#   30/09/2024            CÓD. AGRUPAMENTO   MÊS REF.   VENCIMENTO   VALOR
+#   R$***1.144.838,19     0022500            01/2022    28/02/2022   R$***…
+#   4000000225008202400
+#
+# O nome do arquivo continua valendo como ÚLTIMO recurso (ele é padronizado no
+# acervo do TJGO e ajuda quando o PDF é digitalizado e não tem texto).
+_RE_COMPETENCIA = re.compile(r"\b(0[1-9]|1[0-2])/(19|20)(\d{2})\b")
+_RE_DATA = re.compile(r"\b(\d{2})/(\d{2})/((?:19|20)\d{2})\b")
+_RE_NUM_AGRUPADA = re.compile(r"\b(\d{15,25})\b")
+_RE_COD_AGRUP = re.compile(r"\b(\d{7})\b")
+
+_MESES_EXT = {"JANEIRO": 1, "FEVEREIRO": 2, "MARCO": 3, "MARÇO": 3, "ABRIL": 4,
+              "MAIO": 5, "JUNHO": 6, "JULHO": 7, "AGOSTO": 8, "SETEMBRO": 9,
+              "SET": 9, "OUTUBRO": 10, "NOVEMBRO": 11, "DEZEMBRO": 12}
+
+
+def _linhas_pagina(doc, pagina=0):
+    """Linhas da página como texto, na ordem visual (usa as coordenadas)."""
+    if doc.page_count <= pagina:
+        return []
+    palavras = doc[pagina].get_text("words")
+    return [" ".join(w[4] for w in linha) for linha in _clusterizar_linhas(palavras)]
+
+
+def _sem_acento_upper(s: str) -> str:
+    import unicodedata
+    s = unicodedata.normalize("NFKD", str(s))
+    return "".join(c for c in s if not unicodedata.combining(c)).upper()
+
+
+def _distribuidora(full: str, nome: str) -> str:
+    """
+    Quem emitiu — do conteúdo; o nome do arquivo é o desempate.
+
+    O fallback pelo nome NÃO é preciosismo: em boa parte do acervo (todo 2022 e
+    jan–set/2023) a marca da concessionária não aparece no TEXTO do PDF, porque
+    o cabeçalho é imagem. Nesses casos o nome do arquivo é a única fonte.
+
+    O layout da tabela seria o candidato natural a substituir isso, mas não
+    serve: jun–set/2023 são borderôs da EQUATORIAL ainda emitidos no template
+    da ENEL (a concessão trocou antes do documento). Usar o layout daria
+    distribuidora errada justamente nesses meses.
+    """
+    for fonte in (full, nome):
+        up = _sem_acento_upper(fonte)
+        if "EQUATORIAL" in up:
+            return "EQUATORIAL"
+        if "ENEL" in up or "CELG" in up:
+            return "ENEL"
+    return ""
+
+
+def _competencia_iso(mm, aaaa) -> str:
+    return f"{int(aaaa):04d}-{int(mm):02d}"
+
+
+def _identidade(doc, full: str, nome: str) -> dict:
+    """
+    Número, código de agrupamento, competência e vencimento — do CONTEÚDO,
+    caindo para o nome do arquivo. Competência sai em `AAAA-MM` e vencimento em
+    `AAAA-MM-DD`, como no resto do app (antes eram `MM/AAAA` e `dd/mm/aaaa`,
+    o que impedia cruzar borderô com fatura numa tabela dinâmica).
+    """
+    numero = cod = competencia = vencimento = ""
+    linhas = _linhas_pagina(doc, 0)
+
+    # 1) Linha de VALORES logo abaixo da linha de RÓTULOS (layout ENEL) ------
+    for i, linha in enumerate(linhas):
+        up = _sem_acento_upper(linha)
+        if "MES REF" in up and "VENCIMENTO" in up:
+            for seguinte in linhas[i + 1:i + 3]:
+                mc = _RE_COMPETENCIA.search(seguinte)
+                md = _RE_DATA.search(seguinte)
+                if mc:
+                    competencia = _competencia_iso(mc.group(1),
+                                                   mc.group(2) + mc.group(3))
+                if md:
+                    vencimento = f"{md.group(3)}-{md.group(2)}-{md.group(1)}"
+                mcod = _RE_COD_AGRUP.search(seguinte)
+                if mcod:
+                    cod = mcod.group(1)
+                if competencia:
+                    break
+            break
+        if "NUMERO DA FATURA AGRUPADA" in up:
+            for seguinte in linhas[i + 1:i + 3]:
+                mn = _RE_NUM_AGRUPADA.search(seguinte)
+                if mn:
+                    numero = mn.group(1)
+                    break
+
+    # 2) EQUATORIAL: cabeçalho solto no topo, sem rótulos ao lado -----------
+    if not competencia or not vencimento or not numero:
+        topo = "\n".join(linhas[:12])
+        if not competencia:
+            mc = _RE_COMPETENCIA.search(topo)
+            if mc:
+                competencia = _competencia_iso(mc.group(1), mc.group(2) + mc.group(3))
+        if not vencimento:
+            md = _RE_DATA.search(topo)
+            if md:
+                vencimento = f"{md.group(3)}-{md.group(2)}-{md.group(1)}"
+        if not numero:
+            mn = _RE_NUM_AGRUPADA.search(topo)
+            if mn:
+                numero = mn.group(1)
+        if not cod:
+            mcod = _RE_COD_AGRUP.search(topo)
+            if mcod:
+                cod = mcod.group(1)
+
+    # 3) Documento todo (PDF com o cabeçalho em outra página) ---------------
+    if not numero:
+        mn = _RE_NUM_AGRUPADA.search(full)
+        if mn:
+            numero = mn.group(1)
+    if not cod:
+        cod = _cod_agrupamento(full)
+
+    # 4) Último recurso: o nome do arquivo ----------------------------------
+    if not numero:
+        mn = _RE_NUM_AGRUPADA.search(nome)
+        if mn:
+            numero = mn.group(1)
+    if not competencia:
+        # "… - AGOSTO.2024 - …" / "… - SET.2025 - …"
+        mm = re.search(r"\b([A-ZÇ]{3,9})\.?\s*((?:19|20)\d{2})\b",
+                       _sem_acento_upper(nome).replace("Ç", "C"))
+        if mm and mm.group(1) in _MESES_EXT:
+            competencia = _competencia_iso(_MESES_EXT[mm.group(1)], mm.group(2))
+        else:
+            mc = _RE_COMPETENCIA.search(nome)
+            if mc:
+                competencia = _competencia_iso(mc.group(1), mc.group(2) + mc.group(3))
+    if not vencimento:
+        mv = re.search(r"VENC\.?\s*(\d{2})\.(\d{2})\.(\d{2,4})", nome, re.IGNORECASE)
+        if mv:
+            dd, mmv, yy = mv.groups()
+            if len(yy) == 2:
+                yy = "20" + yy
+            vencimento = f"{yy}-{mmv}-{dd}"
+
+    return {"numero": numero, "cod_agrupamento": cod,
+            "competencia": competencia, "vencimento": vencimento}
+
+
+def _montar_id(distribuidora: str, numero: str, competencia: str) -> str:
+    """
+    `id_bordero`: prefixo da distribuidora + número da fatura agrupada.
+
+    Sem número (PDF digitalizado, layout novo, arquivo renomeado), cai para
+    DISTRIBUIDORA_AAAAMM — que é único por borderô, já que cada distribuidora
+    emite um por mês. Nunca devolve vazio: sem nada disso, usa o que houver.
+    """
+    dist = distribuidora or "BORDERO"
+    if numero:
+        return f"{dist}_{numero}"
+    if competencia:
+        return f"{dist}_{competencia.replace('-', '')}"
+    return dist
+
+
+# --------------------------------------------------------------------------- #
 # API pública
 # --------------------------------------------------------------------------- #
 @dataclass
@@ -312,13 +467,17 @@ def processar_pdf(path: str) -> ResultadoBordero:
     nome = os.path.basename(path)
     doc = fitz.open(path)
     full = _texto_completo(doc)
-    numero, distribuidora, competencia, vencimento = _parse_nome(nome)
-    id_bordero = f"{distribuidora}_{numero}" if distribuidora else numero
+    distribuidora = _distribuidora(full, nome)
+    ident = _identidade(doc, full, nome)
+    numero = ident["numero"]
+    competencia = ident["competencia"]
+    vencimento = ident["vencimento"]
+    id_bordero = _montar_id(distribuidora, numero, competencia)
 
     total = _anchor_total(full)
     contas = _anchor_contas(full)
     bruto, retencoes = _anchor_bruto_retencoes(full)
-    cod_agr = _cod_agrupamento(full)
+    cod_agr = ident["cod_agrupamento"] or _cod_agrupamento(full)
 
     # Detalhe por UC só é confiável se as páginas têm texto (não são escaneadas).
     texto_detalhe = sum(len(doc[i].get_text().strip()) for i in range(1, doc.page_count))

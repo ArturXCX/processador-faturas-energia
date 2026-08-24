@@ -70,15 +70,18 @@ Colunas-chave especiais:
 - **`id_uc_canonico`** (todas as abas com `id_uc`): a UC identificada segundo a
   **metodologia escolhida** pelo usuário na aba Parâmetros
   (`dicionario_uc.modo()`, persistida em `%APPDATA%/FaturasEnergia/config_uc.json`):
-  - `MODO_DICIONARIO` (padrão): a UC do **dicionário oficial**, sem pontuação.
+  - `MODO_DICIONARIO`: a UC do **dicionário oficial** importado, sem pontuação.
     O `id_uc` impresso não é estável no tempo — o formato mudou
     (`10008414082` → `2.742.876.012-19`, mesma UC) — e a reconciliação por
     medidor quebra quando a UC troca de medidor. O dicionário é cadastral,
     então une o histórico completo da UC real; UC fora do dicionário cai para o
     valor inferido pelo medidor.
-  - `MODO_MEDIDOR`: a UC inferida pelo **medidor** (comportamento clássico,
-    para instituições sem cadastro oficial). As 28 colunas do dicionário **não
-    são criadas** e o dicionário nem é lido.
+  - `MODO_MEDIDOR` (**padrão**): a UC inferida pelo **medidor** (comportamento
+    clássico, para instituições sem cadastro oficial). As 28 colunas do
+    dicionário **não são criadas** e o dicionário nem é lido. É o padrão porque
+    o app não embarca cadastro de instituição nenhuma — o cadastro é sempre
+    importado (com casamento tolerante de nomes de campo, ver
+    `dicionario_uc.analisar`).
 
   **É a coluna recomendada para agrupar por UC** (ex.: no Power BI) nas duas.
   `schema.DEDUP_KEYS["unidade_consumidora"]` continua sendo `id_uc` — migrar
@@ -87,8 +90,8 @@ Colunas-chave especiais:
 - **Cadastro do dicionário** (28 colunas em `unidade_consumidora`, entre `uf` e
   `primeira_competencia`): `unidade_judiciaria`, `comarca`, `concessionaria`,
   `endereco_dicionario`, `medidor_atual_dicionario`, colunas de rateio, etc.
-  Vêm de `resources/dicionario_uc.json` (ou do arquivo importado pelo usuário em
-  `%APPDATA%/FaturasEnergia/dicionario_uc.json`). `razao_social`/`cnpj`/`cep`/
+  Vêm do cadastro IMPORTADO pelo usuário (`%APPDATA%/FaturasEnergia/dicionario_uc.json`)
+  — o app não embarca nenhum. `razao_social`/`cnpj`/`cep`/
   `municipio`/`uf` continuam vindo do PDF. **Demanda contratada nunca vem do
   dicionário** — ver abaixo.
 - **`demanda_contratada_kw` / `demanda_geracao_contratada_kw`** vêm SEMPRE do
@@ -150,7 +153,8 @@ src/faturas_app/
 │   ├── mapping_dialog.py tela de mapeamento (quando não há metadados)
 │   ├── widgets.py       SeletorPastas, SeletorLink, PainelProgresso
 │   └── worker.py        processamento em thread + fila de eventos
-└── resources/           glossario_itens.json (301 itens), hardcodes_padrao.json, build_info.txt (carimbo)
+└── resources/           glossario_itens.json (301 itens), correcoes.json, build_info.txt (carimbo)
+                         (NÃO há dados de instituição: hardcodes e dicionário de UC são importados pelo usuário)
 ```
 
 **Regra de ouro:** o `core/` nunca importa `gui/`. Toda a lógica de negócio é
@@ -198,7 +202,7 @@ Não confundir com `correcoes.py`, que conserta erros de EXTRAÇÃO e é embutid
   as condições se ligam por **E** ou **OU** — expressando
   `SE (X=1 OU X=2) E (Y≠3) ENTÃO Z=0`. Grupos, condições e ações são incrementáveis.
 - Persistidas em `%APPDATA%/FaturasEnergia/hardcodes.json`. Na primeira execução o
-  arquivo é semeado com `resources/hardcodes_padrao.json`; depois disso o arquivo do
+  arquivo começa VAZIO (o app não traz regra embutida); o arquivo do
   usuário manda (lista vazia é respeitada, não é re-semeada).
 - Casamento **tolerante**, como em `correcoes.py`: nomes de aba/coluna e valores são
   normalizados (maiúsculas, sem acento, espaços colapsados) e a comparação é numérica

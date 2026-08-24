@@ -35,7 +35,9 @@ A lógica de extração foi portada dos notebooks originais em `scripts_og/`.
 - **Tesseract (OCR) embutido:** `tesseract\` (~46 MB, montado por `build\fetch_tesseract.ps1`)
 - **Build LOCAL do PyInstaller:** `%LOCALAPPDATA%\FaturasBuild\` (ver §7)
 - **Dados do usuário (equivalências):** `%APPDATA%\FaturasEnergia\equivalencias.json`
-- **Dicionário de UCs (opcional, sobrepõe a semente):** `%APPDATA%\FaturasEnergia\dicionario_uc.json`
+- **Dicionário de UCs (só existe se importado):** `%APPDATA%\FaturasEnergia\dicionario_uc.json`
+- **Metodologia de UC escolhida:** `%APPDATA%\FaturasEnergia\config_uc.json`
+- **Hardcodes do usuário:** `%APPDATA%\FaturasEnergia\hardcodes.json` (nenhum vem embutido)
 
 ---
 
@@ -116,14 +118,16 @@ id_uc_canonico` (inseridas programaticamente — ver nota abaixo).
 contém depende da **metodologia escolhida** na aba Parâmetros
 (`dicionario_uc.modo()`, persistida em `%APPDATA%\FaturasEnergia\config_uc.json`):
 
-- **`MODO_DICIONARIO`** (padrão): vem do **dicionário oficial**
+- **`MODO_DICIONARIO`**: vem do **dicionário oficial**
   (`core/dicionario_uc.py`) e une o histórico da mesma UC real mesmo quando o
   `id_uc` mudou de formato (`10008414082` → `2.742.876.012-19`) ou o medidor foi
   trocado — casos em que `id_uc_atual_medidor` falha. UC fora do dicionário cai
   para o valor inferido pelo medidor.
-- **`MODO_MEDIDOR`**: comportamento CLÁSSICO, para instituições sem cadastro
-  oficial — `id_uc_canonico` recebe o valor inferido pelo medidor e **as 28
-  colunas do dicionário não são criadas**. O dicionário nem é lido.
+- **`MODO_MEDIDOR`** (PADRÃO): comportamento CLÁSSICO, para instituições sem
+  cadastro oficial — `id_uc_canonico` recebe o valor inferido pelo medidor e
+  **as 28 colunas do dicionário não são criadas**. O dicionário nem é lido.
+  É o padrão porque o app **não embarca cadastro nenhum**: instalação nova não
+  tem dicionário até alguém importar um.
 
 `id_uc_atual_medidor` (heurística por medidor) é mantido como está nas duas.
 
@@ -155,10 +159,9 @@ por fatura processada e leva um `drop_duplicates()` ao final (derivados.py) —
 como os dados cadastrais e os agregados primeira/ultima_* são iguais para todas
 as faturas da mesma UC, sobra 1 linha por UC.
 
-> As 28 colunas de cadastro vêm de `core/dicionario_uc.py` (semente em
-> `resources/dicionario_uc.json`, 221 UCs; override do usuário em
-> `%APPDATA%\FaturasEnergia\dicionario_uc.json`, importável pela aba
-> Parâmetros). `razao_social`/`cnpj`/`cep`/`municipio`/`uf` continuam vindo do
+> As 28 colunas de cadastro vêm de `core/dicionario_uc.py`. O app NÃO embarca
+> cadastro nenhum: o arquivo é importado pela aba Parâmetros e fica em
+> `%APPDATA%\FaturasEnergia\dicionario_uc.json`. `razao_social`/`cnpj`/`cep`/`municipio`/`uf` continuam vindo do
 > PDF. **Demanda contratada NUNCA vem do dicionário** — só da fatura do mês.
 > Os booleanos são gravados como True/False nativos (não "Sim"/"Não").
 > `primeira/ultima_*` agora agregam por `id_uc_canonico`, não por `id_uc`.
@@ -237,8 +240,9 @@ Núcleo (`src/faturas_app/core/`, sem GUI):
   → `_derivar_tarifas` → `_tipo_fornecimento_upper` → `_reordenar_canonico`.
 - `dicionario_uc.py` — cadastro OFICIAL de UCs: resolve o `id_uc` em qualquer
   formato (índice por dígitos sobre UC/UC VELHA/UC FORMATADO) e devolve as 28
-  colunas cadastrais. Semente em `resources/dicionario_uc.json`; override do
-  usuário em `%APPDATA%\FaturasEnergia\dicionario_uc.json` (aba Parâmetros).
+  colunas cadastrais. Sem semente embutida: o cadastro é importado pela aba
+  Parâmetros (`%APPDATA%\FaturasEnergia\dicionario_uc.json`), com casamento
+  tolerante de nomes de campo (`analisar`).
 - `equivalencias.py` — tabela item→item_normalizado (JSON em %APPDATA%).
 - `links.py` — coluna link_pdf. `glossario.py` — aba glossario. `build_info.py` — carimbo.
 - `controller.py` — orquestra o processamento das pastas (progresso/cancelar).
@@ -329,6 +333,20 @@ Reverter: extraia o `.zip` por cima de `app_faturas`.
   99,86%+ EQ reconciliadas.
 - **FATURAS_SELFCHECK** é o arquivo de SAÍDA do relatório (o app ESCREVE nele) —
   nunca apontar para um arquivo que não possa ser sobrescrito.
+- **Nada de dados de instituição embutidos no app.** Não existem mais
+  `resources/hardcodes_padrao.json` nem `resources/dicionario_uc.json`: eram do
+  TJGO e iam para todo mundo que instalasse. `hardcodes.padrao()` devolve `[]`
+  sempre, e o dicionário só existe se o usuário importar. Não voltar a semear.
+- **Identidade do borderô vem do CONTEÚDO, não do nome do arquivo.** O parser
+  antigo trazia `4000000225` (o código de agrupamento do TJGO) escrito no regex
+  do NOME — renomear o PDF zerava a identidade. Hoje número, competência,
+  vencimento e código saem do cabeçalho impresso; o nome é último recurso.
+  EXCEÇÃO conhecida: em todo 2022 e jan–set/2023 a marca da concessionária não
+  está no texto (cabeçalho é imagem), então ali a `distribuidora` vem mesmo do
+  nome do arquivo. O layout da tabela NÃO serve de substituto — jun–set/2023
+  são borderôs da EQUATORIAL ainda no template da ENEL.
+- **Borderô: competência é `AAAA-MM` e vencimento `AAAA-MM-DD`** (eram
+  `MM/AAAA` e `dd/mm/aaaa`), para cruzar com a planilha de faturas.
 - **Pós-processamento NÃO roda na thread da interface.** `to_dataframes` +
   `derivados` + `hardcodes` + `Perfil` são proporcionais ao LOTE inteiro: com
   10 mil faturas isso levava minutos e, rodando na thread do Tk, a janela

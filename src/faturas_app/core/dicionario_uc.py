@@ -10,13 +10,16 @@ identidade e cadastro de UC de texto de fatura (ruidoso, variável por
 layout/época) quando existe uma fonte melhor: um cadastro oficial mantido à
 parte, que é o que este módulo lê.
 
-Segue o mesmo padrão de `equivalencias.py`/`hardcodes.py`/`correcoes.py`:
+O app NÃO embarca nenhum dicionário: o que existia era o cadastro do TJGO, e
+embarcá-lo impunha os dados de uma instituição a todas as outras. O cadastro é
+sempre IMPORTADO pelo usuário, e fica em
+`%APPDATA%/FaturasEnergia/dicionario_uc.json`.
 
-  - **Semente embutida**: `resources/dicionario_uc.json` (vai no pacote).
-  - **Override do usuário**: `%APPDATA%/FaturasEnergia/dicionario_uc.json`, com
-    prioridade sobre a semente — permite atualizar o cadastro (UC nova, medidor
-    trocado, UJ renomeada) sem um build novo do app, reimportando o JSON pela
-    aba Parâmetros.
+  - **Importação tolerante**: o JSON não precisa ter exatamente os nomes de
+    campo do TJGO. As chaves são casadas sem acento/maiúsculas/pontuação contra
+    uma tabela de sinônimos (`_ALIASES`), então um cadastro de outra origem
+    (`"unidade_consumidora"`, `"id_uc"`, `"endereco"`, `"orgao"`…) é entendido
+    do mesmo jeito. O que não for reconhecido vira aviso, não erro.
   - **Índice de busca** por dígitos, cobrindo `UC`, `UC VELHA` e
     `UC FORMATADO (…)` — é isso que faz um `id_uc` em QUALQUER formato (antigo
     ou atual, com ou sem pontuação) resolver para o mesmo registro.
@@ -36,7 +39,6 @@ from __future__ import annotations
 import json
 import os
 import re
-from importlib import resources
 from pathlib import Path
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -84,6 +86,100 @@ _CAMPOS_TRATADOS_A_PARTE = {"UC", "MEDIDORES_UTILIZADOS"}
 # dizer que a exclusão é intencional, para ninguém "consertar" isso depois.
 _CAMPOS_EXCLUIDOS = {"DEMANDA CONTRATADA (kW)", "DEMANDA GERAÇÃO (kW)"}
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Importação TOLERANTE: sinônimos de nome de campo
+# ──────────────────────────────────────────────────────────────────────────────
+# Um cadastro vindo de outra instituição não vai usar os rótulos do TJGO. Cada
+# chave do JSON é normalizada (sem acento, sem pontuação, minúscula, sem
+# espaços) e casada contra esta tabela; o registro é reescrito para as chaves
+# canônicas ANTES de qualquer outra coisa. Assim `_CAMPO_PARA_COLUNA` continua
+# sendo uma tabela explícita (a blindagem contra os campos de demanda), e ao
+# mesmo tempo o app aceita arquivos de origens diferentes.
+def _n(txt) -> str:
+    import unicodedata
+    s = unicodedata.normalize("NFKD", str(txt))
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return re.sub(r"[^A-Za-z0-9]+", "", s).upper()
+
+
+_ALIASES = {
+    "UC": ("UC", "IDUC", "UNIDADECONSUMIDORA", "NUMEROUC", "NUMERODAUC",
+           "CODIGOUC", "INSTALACAO", "NUMEROINSTALACAO"),
+    "UC VELHA": ("UCVELHA", "UCANTIGA", "IDUCANTIGO", "UCANTIGO",
+                 "NUMEROANTIGO", "CODIGOANTIGO"),
+    "UC RESOLUÇÃO Nº 1095/2024 ANEEL (BORDERÔ)": (
+        "UCRESOLUCAON10952024ANEELBORDERO", "UCBORDERO", "UCANEEL", "BORDERO"),
+    "OPERANTE": ("OPERANTE", "ATIVA", "ATIVO", "EMOPERACAO", "SITUACAO"),
+    "MEDIDORES_UTILIZADOS": ("MEDIDORESUTILIZADOS", "MEDIDORES",
+                             "MEDIDORESUSADOS", "HISTORICOMEDIDORES"),
+    "MEDIDOR_ATUAL": ("MEDIDORATUAL", "MEDIDOR", "NUMEROMEDIDOR"),
+    "UNIDADE JUDICIÁRIA": ("UNIDADEJUDICIARIA", "UJ", "ORGAO", "UNIDADE",
+                           "LOTACAO", "SETOR", "DESCRICAO", "NOME"),
+    "UJ - UC - AT/BT - GD": ("UJUCATBTGD", "RESUMO"),
+    "CONCESSIONÁRIA": ("CONCESSIONARIA", "DISTRIBUIDORA", "FORNECEDORA",
+                       "FORNECEDOR"),
+    "ENDEREÇO": ("ENDERECO", "LOGRADOURO", "ENDERECOCOMPLETO", "LOCAL"),
+    "COMARCA": ("COMARCA", "MUNICIPIO", "CIDADE"),
+    "FORNECIMENTO (GRUPO AT/BT)": ("FORNECIMENTOGRUPOATBT", "GRUPO",
+                                   "GRUPOTENSAO", "TIPOFORNECIMENTO"),
+    "LIMITE FORNECIMENTO": ("LIMITEFORNECIMENTO", "LIMITETENSAO", "TENSAO",
+                            "FAIXATENSAO"),
+    "GD (GERAÇÃO DISTRIBUÍDA)": ("GDGERACAODISTRIBUIDA", "GD",
+                                 "GERACAODISTRIBUIDA", "POSSUIGD"),
+    "PARTICIPA DOS RATEIOS DE ALGUMA FORMA": (
+        "PARTICIPADOSRATEIOSDEALGUMAFORMA", "PARTICIPARATEIO", "RATEIO"),
+    "GERADOR (PARA OS RATEIOS)": ("GERADORPARAOSRATEIOS", "GERADOR",
+                                  "EGERADOR"),
+    "BENEFICIÁRIAS DO RATEIO": ("BENEFICIARIASDORATEIO", "BENEFICIARIA",
+                                "EBENEFICIARIA"),
+    "RATEIO COMUM": ("RATEIOCOMUM",),
+    "RATEIO DA UFV DE CACHOEIRA DOURADA": ("RATEIODAUFVDECACHOEIRADOURADA",),
+    "PORCENTAGEM (%)": ("PORCENTAGEM", "PERCENTUAL", "PERCENTUALRATEIO"),
+    "Alteração de Demanda (kW)": ("ALTERACAODEDEMANDAKW", "ALTERACAODEDEMANDA"),
+    "Demanda Futura (kW)": ("DEMANDAFUTURAKW", "DEMANDAFUTURA"),
+    "Protocolo da alteração de demanda": ("PROTOCOLODAALTERACAODEDEMANDA",
+                                          "PROTOCOLO"),
+    "Saldos do SCEE (GDs)": ("SALDOSDOSCEEGDS", "SALDOSCEE", "SALDO"),
+    "PRIORIDADE": ("PRIORIDADE",),
+    "GD SEM RATEIO": ("GDSEMRATEIO",),
+    "USINA FOTOVOLTAICA (USINA DE CACHOEIRA DOURADA/UFV DE CACHOEIRA DOURADA)": (
+        "USINAFOTOVOLTAICAUSINADECACHOEIRADOURADAUFVDECACHOEIRADOURADA",
+        "USINAFOTOVOLTAICA", "UFV"),
+}
+
+# {forma_normalizada: chave_canonica}
+_MAPA_ALIAS = {}
+for _canon, _formas in _ALIASES.items():
+    _MAPA_ALIAS[_n(_canon)] = _canon
+    for _f in _formas:
+        _MAPA_ALIAS.setdefault(_n(_f), _canon)
+
+
+def _canonizar_registro(reg: dict) -> dict:
+    """Reescreve as chaves de UM registro para os nomes canônicos conhecidos.
+
+    Chave já canônica passa direto. Chave reconhecida por sinônimo é renomeada
+    (sem sobrescrever uma canônica que já exista). Chave desconhecida é mantida
+    como veio — `_construir` avisa sobre ela, e é assim que um campo novo do
+    cadastro aparece no relatório em vez de sumir em silêncio.
+    """
+    if not isinstance(reg, dict):
+        return reg
+    out = {}
+    for k, v in reg.items():
+        if k in _CAMPO_PARA_COLUNA or k in _CAMPOS_TRATADOS_A_PARTE \
+                or str(k).startswith("UC FORMATADO"):
+            out[k] = v
+            continue
+        nk = _n(k)
+        if nk.startswith("UCFORMATADO"):
+            out["UC FORMATADO (importado)"] = v
+            continue
+        canon = _MAPA_ALIAS.get(nk)
+        out[canon if (canon and canon not in out and canon not in reg) else k] = v
+    return out
+
 # Colunas produzidas por `campos_unidade_consumidora`, na ordem em que aparecem
 # em `schema.CANONICAL_COLUMNS["unidade_consumidora"]`.
 # `medidores_utilizados_dicionario` não vem de `_CAMPO_PARA_COLUNA` (o campo é
@@ -122,10 +218,10 @@ MODO_DICIONARIO = "dicionario"
 MODO_MEDIDOR = "medidor"
 MODOS = (MODO_DICIONARIO, MODO_MEDIDOR)
 
-# Padrão: dicionário. Mantém o comportamento de quem já usa o app com o cadastro
-# do TJGO; quem não tem um JSON troca uma vez na aba Parâmetros e a escolha fica
-# salva. Em MODO_MEDIDOR o dicionário nem é lido.
-MODO_PADRAO = MODO_DICIONARIO
+# Padrão: MEDIDOR. Como o app não embarca mais nenhum dicionário, a metodologia
+# que funciona sem cadastro é a única que faz sentido numa instalação nova.
+# Importar um JSON pela aba Parâmetros já liga o MODO_DICIONARIO sozinho.
+MODO_PADRAO = MODO_MEDIDOR
 
 # Cache em memória (invalidado por `recarregar()`), no mesmo espírito de
 # `correcoes._dados()`: {"registros", "indice", "avisos", "fonte", "arquivo"}.
@@ -190,26 +286,25 @@ def _so_digitos(v):
 
 
 def _ler_bruto() -> tuple[list, str, str | None]:
-    """(registros, fonte, caminho) — override do usuário, senão a semente."""
+    """
+    (registros, fonte, caminho) — só o arquivo IMPORTADO pelo usuário.
+
+    O app não embarca mais nenhum dicionário: o que existia era o cadastro do
+    TJGO, que não serve (e não deveria ser imposto) a outras instituições. Sem
+    arquivo importado, o dicionário fica vazio e o app usa a metodologia por
+    MEDIDOR (ver `MODO_PADRAO`).
+    """
     alvo = arquivo_usuario()
     if alvo.is_file():
         try:
-            data = json.loads(alvo.read_text(encoding="utf-8"))
-            if isinstance(data, list):
-                return data, "usuario", str(alvo)
+            data = _lista_de_registros(json.loads(alvo.read_text(encoding="utf-8")))
+            if data is not None:
+                return [_canonizar_registro(r) for r in data], "usuario", str(alvo)
         except Exception:
-            # Arquivo do usuário corrompido/ilegível: cai para a semente em vez
-            # de derrubar o processamento (o aviso sai em `avisos()`).
+            # Arquivo corrompido/ilegível: segue vazio em vez de derrubar o
+            # processamento (o aviso sai em `avisos()`).
             pass
-    try:
-        with resources.files("faturas_app.resources").joinpath(
-                _NOME_ARQUIVO).open("r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, list):
-            return data, "semente", None
-    except Exception:
-        pass
-    return [], "semente", None
+    return [], "nenhum", None
 
 
 def _chaves_de_busca(reg: dict) -> list:
@@ -344,33 +439,128 @@ def avisos() -> list[str]:
     return list(_dados()["avisos"])
 
 
+def _lista_de_registros(data):
+    """
+    Extrai a LISTA de UCs de um JSON, aceitando os formatos usuais:
+
+      * uma lista de objetos (formato canônico);
+      * um objeto embrulhando a lista (`{"ucs": [...]}`, `{"data": [...]}`,
+        `{"registros": [...]}` — ou qualquer chave cujo valor seja a maior
+        lista de objetos do arquivo);
+      * um objeto indexado por UC (`{"274287601219": {...}, ...}`), caso em que
+        a chave vira o campo `UC` do registro.
+
+    Devolve None quando não dá para enxergar uma lista de registros.
+    """
+    if isinstance(data, list):
+        # lista vazia continua sendo "uma lista" — quem valida dá a mensagem
+        # certa ("não tem nenhuma UC"), em vez de "não enxerguei uma lista".
+        return [r for r in data if isinstance(r, dict)]
+    if not isinstance(data, dict):
+        return None
+    # objeto embrulhando a lista: pega a maior lista de dicts entre os valores
+    candidatas = [v for v in data.values()
+                  if isinstance(v, list) and v and isinstance(v[0], dict)]
+    if candidatas:
+        return max(candidatas, key=len)
+    # objeto indexado pela própria UC
+    if data and all(isinstance(v, dict) for v in data.values()):
+        out = []
+        for chave, reg in data.items():
+            reg = dict(reg)
+            reg.setdefault("UC", chave)
+            out.append(reg)
+        return out
+    return None
+
+
+def _uc_do_registro(reg: dict):
+    """Identificador da UC no registro, aceitando qualquer sinônimo conhecido."""
+    if not isinstance(reg, dict):
+        return None
+    reg = _canonizar_registro(reg)
+    v = reg.get("UC")
+    return v if str(v or "").strip() else None
+
+
 def validar_estrutura(registros) -> None:
     """
-    Valida o mínimo que um arquivo importado precisa ter: uma LISTA de objetos,
-    cada um com a chave 'UC'. Levanta ValueError explicando o problema.
+    Valida o mínimo para um cadastro ser utilizável: dá para enxergar uma lista
+    de registros, e ao menos um deles tem um identificador de UC reconhecível.
+
+    Deliberadamente FROUXA: o objetivo é aceitar cadastros de origens
+    diferentes, não impor o formato do TJGO. O que estiver estranho aparece no
+    relatório de `importar`, não como exceção.
     """
-    if not isinstance(registros, list):
-        raise ValueError("O arquivo precisa conter uma LISTA de unidades "
-                         "consumidoras (um '[' na primeira linha).")
-    if not registros:
+    lista = _lista_de_registros(registros)
+    if lista is None:
+        raise ValueError(
+            "Não consegui enxergar uma lista de unidades consumidoras no "
+            "arquivo. Esperado: uma lista de objetos JSON, ou um objeto "
+            "contendo essa lista.")
+    if not lista:
         raise ValueError("O arquivo não tem nenhuma unidade consumidora.")
-    for i, reg in enumerate(registros, start=1):
-        if not isinstance(reg, dict):
-            raise ValueError(f"O item {i} da lista não é um registro de UC.")
-        if not str(reg.get("UC", "")).strip():
-            raise ValueError(f"O item {i} da lista não tem o campo 'UC'.")
+    com_uc = sum(1 for r in lista if _uc_do_registro(r) is not None)
+    if com_uc == 0:
+        exemplo = ", ".join(list(lista[0].keys())[:8]) or "(registro vazio)"
+        raise ValueError(
+            "Nenhum registro tem um campo de Unidade Consumidora reconhecível "
+            "(UC, id_uc, unidade_consumidora, instalacao…).\n"
+            f"Campos encontrados no 1º registro: {exemplo}")
+
+
+def analisar(caminho: str):
+    """
+    Lê um JSON de cadastro e devolve `(registros_canonizados, relatorio)` SEM
+    gravar nada — para a interface mostrar o que entendeu antes de aplicar.
+    """
+    with open(caminho, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    validar_estrutura(data)
+    lista = _lista_de_registros(data) or []
+    registros = [_canonizar_registro(r) for r in lista]
+
+    com_uc = sum(1 for r in registros if str(r.get("UC") or "").strip())
+    reconhecidos, desconhecidos = set(), {}
+    for r in registros:
+        for k in r:
+            if k in _CAMPO_PARA_COLUNA or k in _CAMPOS_TRATADOS_A_PARTE \
+                    or str(k).startswith("UC FORMATADO"):
+                reconhecidos.add(k)
+            else:
+                desconhecidos[k] = desconhecidos.get(k, 0) + 1
+
+    rel = [f"{len(registros)} unidade(s) consumidora(s) no arquivo.",
+           f"{com_uc} com identificador de UC reconhecido."]
+    if com_uc < len(registros):
+        rel.append(f"⚠ {len(registros) - com_uc} registro(s) SEM UC — serão "
+                   f"ignorados na busca.")
+    rel.append(f"{len(reconhecidos)} campo(s) de cadastro reconhecido(s) e "
+               f"mapeado(s) para colunas.")
+    for k, n in sorted(desconhecidos.items(), key=lambda kv: -kv[1])[:10]:
+        if k in _CAMPOS_EXCLUIDOS:
+            rel.append(f"⚠ campo '{k}' IGNORADO de propósito — demanda "
+                       f"contratada vem sempre da fatura, nunca do cadastro.")
+        else:
+            rel.append(f"⚠ campo '{k}' não é conhecido ({n} registro(s)) — "
+                       f"ignorado.")
+    return registros, rel
 
 
 def importar(caminho: str) -> dict:
     """
-    Copia um dicionário externo para `%APPDATA%/FaturasEnergia/` (passando a
-    valer sobre a semente embutida) e recarrega o cache. Devolve os metadados
-    novos. Levanta ValueError se a estrutura mínima não bater.
+    Copia um cadastro externo para `%APPDATA%/FaturasEnergia/`, recarrega o
+    cache e LIGA a metodologia por dicionário (importar um cadastro é a forma
+    de dizer que se quer usá-lo). Devolve os metadados novos.
+
+    Levanta ValueError se o arquivo não puder ser interpretado.
     """
-    with open(caminho, "r", encoding="utf-8") as f:
-        registros = json.load(f)
-    validar_estrutura(registros)
+    registros, _rel = analisar(caminho)
     arquivo_usuario().write_text(
         json.dumps(registros, ensure_ascii=False, indent=1), encoding="utf-8")
     recarregar()
+    try:
+        definir_modo(MODO_DICIONARIO)
+    except Exception:
+        pass
     return metadados()

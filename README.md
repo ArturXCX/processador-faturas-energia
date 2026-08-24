@@ -155,9 +155,9 @@ instituição — sem essa opção, o app só serviria para ela:
 | **Com dicionário (JSON)** | `id_uc_canonico` = UC do cadastro oficial | 28 colunas vindas do JSON |
 | **Sem dicionário (pelo medidor)** | `id_uc_canonico` = UC inferida pelo **medidor** | só o que vem do PDF |
 
-Na metodologia **sem dicionário** (comportamento clássico do app) as 28 colunas
-de cadastro **não são criadas** — a planilha não vem cheia de coluna vazia de um
-cadastro que não é da sua instituição.
+Na metodologia **sem dicionário** (padrão, e comportamento clássico do app) as
+28 colunas de cadastro **não são criadas** — a planilha não vem cheia de coluna
+vazia de um cadastro que não é da sua instituição.
 
 O número da UC impresso na fatura **não é estável no tempo**: o formato mudou
 historicamente (`10008414082` → `2.742.876.012-19`, mesma UC) e a reconciliação
@@ -165,17 +165,48 @@ por medidor quebra quando a UC troca de medidor. É esse problema que a
 metodologia **com dicionário** resolve — o app extrai do PDF apenas o `id_uc`
 bruto (mais `razao_social`/`cnpj`/`cep`/`municipio`/`uf`).
 
-- Semente embutida: `src/faturas_app/resources/dicionario_uc.json` (221 UCs).
-- Atualização **sem novo build**: aba **Parâmetros → "Importar novo dicionário
-  (.json)"**, que grava em `%APPDATA%\FaturasEnergia\dicionario_uc.json` e passa
-  a valer sobre a semente.
-- Alimenta a coluna `id_uc_canonico` (em todas as abas com `id_uc`) e as 28
-  colunas de cadastro de `unidade_consumidora`.
+- **Nada vem embutido**: o app não acompanha cadastro de nenhuma instituição.
+  Instalação nova nasce na metodologia **sem dicionário**.
+- **Importação tolerante**: aba **Parâmetros → "Importar novo dicionário
+  (.json)"**. O JSON não precisa usar os rótulos de nenhuma instituição
+  específica — `id_uc`/`unidade_consumidora`/`instalacao`, `orgao`/`unidade`,
+  `endereco`, `municipio`, `distribuidora`… são reconhecidos por sinônimo.
+  Aceita lista de objetos, objeto embrulhando a lista (`{"ucs": [...]}`) ou
+  objeto indexado pela UC. O app mostra o que entendeu ANTES de aplicar.
+- Importar um cadastro liga a metodologia por dicionário automaticamente, grava
+  em `%APPDATA%\FaturasEnergia\dicionario_uc.json` e alimenta `id_uc_canonico`
+  e as 28 colunas de cadastro de `unidade_consumidora`.
 
 > A **demanda contratada** nunca vem do dicionário — sempre da fatura do mês.
 > O mapeamento campo→coluna é uma tabela explícita, então um dicionário futuro
 > que volte a trazer `DEMANDA CONTRATADA (kW)` tem esse campo ignorado (com
 > aviso), sem risco de duas fontes divergirem para o mesmo conceito.
+
+### Hardcodes por planilha (`core/hardcodes.py`)
+
+Hardcodes são regras "SE → ENTÃO" que consertam dados errados **na origem**
+(erro da concessionária ao emitir a fatura). O app **não traz nenhuma regra
+embutida** — as que existiam eram do TJGO, e embarcá-las impunha as correções
+de uma instituição a todo mundo.
+
+Cada instituição mantém as suas por planilha, na aba **Hardcodes**:
+
+- **⇧ Exportar para planilha** — backup e, principalmente, **modelo**: exporte
+  para ver o formato exato.
+- **⇩ Importar de planilha** — lê `.xlsx`/`.xlsm`/`.csv`, mostra o que entendeu
+  e pergunta se deve **substituir** tudo ou **acrescentar**.
+
+Formato: duas abas ligadas pelo `id`, porque uma regra é uma árvore (grupos ×
+condições + ações) e não cabe numa linha só.
+
+| aba `hardcodes` (1 linha por condição) | aba `acoes` (1 linha por ação) |
+|---|---|
+| `id · nome · aba · ativo · grupo · ligacao · coluna · operador · valor` | `id · coluna · valor` |
+
+A leitura é tolerante: cabeçalhos casam sem acento/maiúsculas, o operador aceita
+o código (`igual`) ou o rótulo da tela ("é igual a"), `ativo` aceita
+sim/não/true/false/1/0, e o que faltar recebe padrão. O que não for entendido
+vira aviso no relatório, não erro.
 
 ### Aba de glossário (`core/glossario.py`)
 

@@ -259,8 +259,6 @@ class AbaConcatenar(ctk.CTkFrame):
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Erro", f"Falha ao salvar:\n{e}")
             return
-        if messagebox.askyesno("Pronto", f"Planilha salva em:\n{caminho}\n\nDeseja abrir agora?"):
-            try:
-                os.startfile(caminho)  # type: ignore[attr-defined]
-            except Exception:
-                pass
+        # Sem pop-up de "deseja abrir agora?": o caminho vai para o log
+        # da propria tela, que fica visivel, e o usuario abre quando quiser.
+        self.progresso.escrever(f"OK  Planilha salva em: {caminho}")

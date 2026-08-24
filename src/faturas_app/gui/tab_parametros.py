@@ -202,13 +202,15 @@ class AbaParametros(ctk.CTkFrame):
             filetypes=[("Arquivo JSON", "*.json")])
         if not caminho:
             return
+        # `analisar` lê e INTERPRETA sem gravar nada: é ele que casa os nomes de
+        # campo do arquivo com os campos conhecidos (um cadastro de outra
+        # instituição não usa os rótulos do TJGO) e devolve o relatório do que
+        # entendeu. O usuário confere ANTES de substituir o cadastro atual.
         try:
-            with open(caminho, "r", encoding="utf-8") as f:
-                registros = json.load(f)
-            dicionario_uc.validar_estrutura(registros)
+            registros, relatorio = dicionario_uc.analisar(caminho)
         except ValueError as e:
-            messagebox.showerror("Arquivo inválido", f"O arquivo não é um dicionário de UCs "
-                                                     f"válido:\n\n{e}")
+            messagebox.showerror("Arquivo inválido",
+                                 f"O arquivo não é um cadastro de UCs válido:\n\n{e}")
             return
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Erro", f"Não foi possível ler o arquivo:\n{e}")
@@ -217,15 +219,19 @@ class AbaParametros(ctk.CTkFrame):
         atual = dicionario_uc.metadados()
         if not messagebox.askyesno(
                 "Importar dicionário de UCs",
-                f"O dicionário atual tem {atual['total_ucs']} UC(s).\n"
-                f"O arquivo selecionado tem {len(registros)} UC(s).\n\n"
-                "O dicionário atual será substituído. Deseja prosseguir?"):
+                "\n".join(relatorio)
+                + f"\n\nCadastro atual: {atual['total_ucs']} UC(s)."
+                + f"\nArquivo selecionado: {len(registros)} UC(s)."
+                + "\n\nO cadastro atual será substituído. Prosseguir?"):
             return
         try:
             m = dicionario_uc.importar(caminho)
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Erro", f"Não foi possível importar o dicionário:\n{e}")
             return
+        # Importar um cadastro já liga a metodologia por dicionário (é o que a
+        # pessoa quis dizer ao importar), então o seletor precisa acompanhar.
+        self.opt_metodo.set(self._ROTULO_DIC if dicionario_uc.ativo() else self._ROTULO_MED)
         self._atualizar_label_dicionario()
         self.lbl_status.configure(
             text=f"✅ Dicionário importado: {m['total_ucs']} UC(s) cadastrada(s).")
@@ -317,11 +323,7 @@ class AbaParametros(ctk.CTkFrame):
             self.lbl_status.configure(text="⚠ Falha ao aplicar a normalização.")
             messagebox.showerror("Erro", f"Falha ao aplicar a normalização:\n{payload}")
             return
-        self.lbl_status.configure(text="✅ Planilha gerada.\n" + "\n".join(payload))
-        if messagebox.askyesno("Pronto",
-                               f"Planilha salva em:\n{saida}\n\n"
-                               + "\n".join(payload) + "\n\nDeseja abrir agora?"):
-            try:
-                os.startfile(saida)  # type: ignore[attr-defined]
-            except Exception:
-                pass
+        # Sem pop-up de "deseja abrir agora?": o caminho e o resumo já ficam
+        # visíveis no rótulo de status da própria tela.
+        self.lbl_status.configure(
+            text="✅ Planilha gerada em: " + str(saida) + "\n" + "\n".join(payload))

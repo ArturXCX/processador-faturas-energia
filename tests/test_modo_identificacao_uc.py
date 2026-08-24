@@ -63,9 +63,14 @@ def _dfs():
     }
 
 
-def test_padrao_e_o_dicionario():
-    assert dicionario_uc.modo() == dicionario_uc.MODO_DICIONARIO
-    assert dicionario_uc.ativo() is True
+def test_padrao_e_o_medidor():
+    """
+    Instalação nova nasce SEM cadastro (o app não embarca dicionário nenhum),
+    então a metodologia que funciona sem cadastro é a única que faz sentido
+    como padrão. Importar um JSON liga o modo dicionário sozinho.
+    """
+    assert dicionario_uc.modo() == dicionario_uc.MODO_MEDIDOR
+    assert dicionario_uc.ativo() is False
 
 
 def test_escolha_persiste():
