@@ -1,0 +1,1206 @@
+[
+ {
+  "termo": "ACUM. KWH - ADEQ. ART.113",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre parcela de consumo ativo em kWh apurados conforme a REN 414/2010 - Art. 113."
+ },
+ {
+  "termo": "AD. BAND. AMARELA EN. ATIVA INJET.",
+  "definicao": "Representa o valor R$ da energia ativa injetada no mês, com aplicação da Bandeira Tarifária Amarela a ser creditada na fatura."
+ },
+ {
+  "termo": "AD. BAND. VERMELHA EN. ATIVA INJET.",
+  "definicao": "Representa o valor R$ da energia ativa injetada no mês, com aplicação da Bandeira Tarifária Vermelha a ser creditada na fatura."
+ },
+ {
+  "termo": "ADICIONAL BANDEIRA AMARELA",
+  "definicao": "Adicional em R$ incluído nas faturas de energia quando do acionamento do Sistema de Bandeiras tarifárias em Bandeira Amarela."
+ },
+ {
+  "termo": "ADICIONAL BANDEIRA AMARELA ACUMULO",
+  "definicao": "Adicional em R$ incluído nas faturas de energia quando do acionamento do Sistema de Bandeiras tarifárias em Bandeira Amarela referente a Parcela de Acúmulo."
+ },
+ {
+  "termo": "ADICIONAL BANDEIRA AMARELA FP",
+  "definicao": "Adicional em R$ incluído nas faturas de energia quando do acionamento do Sistema de Bandeiras tarifárias em Bandeira Amarela referente ao consumo no horário fora de ponta."
+ },
+ {
+  "termo": "ADICIONAL BANDEIRA AMARELA HR",
+  "definicao": "Adicional em R$ incluído nas faturas de energia quando do acionamento do Sistema de Bandeiras tarifárias em Bandeira Amarela referente ao consumo no horário reservado."
+ },
+ {
+  "termo": "ADICIONAL BANDEIRA AMARELA P",
+  "definicao": "Adicional em R$ incluído nas faturas de energia quando do acionamento do Sistema de Bandeiras tarifárias em Bandeira Amarela referente ao consumo no horário de ponta."
+ },
+ {
+  "termo": "ADICIONAL BANDEIRA VERMELHA",
+  "definicao": "Adicional em R$ incluído nas faturas de energia quando do acionamento do Sistema de Bandeiras tarifárias em Bandeira Vermelha."
+ },
+ {
+  "termo": "ADICIONAL BANDEIRA VERMELHA ACUMULO",
+  "definicao": "Adicional em R$ incluído nas faturas de energia quando do acionamento do Sistema de Bandeiras tarifárias em Bandeira Vermelha referente a Parcela de Acúmulo."
+ },
+ {
+  "termo": "ADICIONAL BANDEIRA VERMELHA FP",
+  "definicao": "Adicional em R$ incluído nas faturas de energia quando do acionamento do Sistema de Bandeiras tarifárias em Bandeira Vermelha referente ao consumo no horário fora de ponta."
+ },
+ {
+  "termo": "ADICIONAL BANDEIRA VERMELHA HR",
+  "definicao": "Adicional em R$ incluído nas faturas de energia quando do acionamento do Sistema de Bandeiras tarifárias em Bandeira Vermelha referente ao consumo no horário Reservado."
+ },
+ {
+  "termo": "ADICIONAL BANDEIRA VERMELHA P",
+  "definicao": "Adicional em R$ incluído nas faturas de energia quando do acionamento do Sistema de Bandeiras tarifárias em Bandeira Vermelha referente ao consumo no horário fora de ponta."
+ },
+ {
+  "termo": "ASS RESIDENCIAL BÁSICA - 0800 600 0560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro ASS RESIDENCIAL BÁSICA, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "ASS RESIDENCIAL PLUS - 0800 600 0560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro ASS RESIDENCIAL PLUS, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "ASSISTÊNCIA AUTO - 0800 600 0560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro ASSISTÊNCIA AUTO, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "ASSISTÊNCIA PET BÁSICA 0800 600 0560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro ASSISTÊNCIA PET BÁSICA, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "ATUALIZAÇÃO MONETÁRIA IGPM",
+  "definicao": "Atualização Monetária pelo IGP-M."
+ },
+ {
+  "termo": "BONUS ITAIPU ART.21 LEI 10438/02 (-)",
+  "definicao": "Representa o valor em R$ do Bônus Itaipú, recebido pela instalação conforme legislação vigente."
+ },
+ {
+  "termo": "CARTÃO DE TODOS - 08002838916",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro CARTÃO DE TODOS, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "CARTÃO DE TODOS - 08002838916 - DEVOL.",
+  "definicao": "Devolução de valor referente ao produto contratado pelo cliente junto ao parceiro CARTÃO DE TODOS, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "CASA SEGURA - 08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro CASA SEGURA, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "CASA SEGURA PLUS - 08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro CASA SEGURA PLUS, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "CASA SEGURA PLUS - 08006000560 - DEVOL.",
+  "definicao": "Devolução de valor referente ao produto contratado pelo cliente junto ao parceiro CASA SEGURA PLUS, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "CENTERCOB - 08006006531",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro CENTERCOB, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "CENTERCOBLTDA CRE IMED. 08006006531",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro CENTERCOBLTDA CRE IMED., com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "CIP RETROATIVA - PARCELADA",
+  "definicao": "Representa o valor em R$ da contribuição de CIP - Contribuição Iluminação Pública, calculada de acordo com a Lei Municipal, conforme previsto na Resolução Normativa 414\\ANEEL\\2010."
+ },
+ {
+  "termo": "COBR. DIFERENÇA DE ADIC. DE BANDEIRA",
+  "definicao": "Cobrança da diferença do adicional em R$ faturado a menor no mês anterior, quando do acionamento do Sistema de Bandeiras tarifárias ."
+ },
+ {
+  "termo": "COBR. DIFERENÇA DE ADICIONAL DE BANDEIRA",
+  "definicao": "Cobrança da diferença do adicional em R$ faturado a menor no mês anterior, quando do acionamento do Sistema de Bandeiras tarifárias ."
+ },
+ {
+  "termo": "COBRANÇA DE ENCERRAMENTO CONTRATUAL ANT",
+  "definicao": "Representa o valor em R$ referente ao ressarcimento devido pelo encerramento antecipado do Contrato de Fornecimento, conforme Resolução Normativa 414\\ANEEL\\2010."
+ },
+ {
+  "termo": "COFINS (3,0%) LEI 9430 (-)",
+  "definicao": "Representa o valor em R$ referente à COFINS - Contribuição Para o Financiamento da Seguridade Social retido conforme LEI 9.430."
+ },
+ {
+  "termo": "COMPENSACAO DE DIC ANUAL",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DIC (Duração de Interrupção Individual) por Unidade Consumidora Anual."
+ },
+ {
+  "termo": "COMPENSACAO DE DIC ANUAL (-)",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DIC (Duração de Interrupção Individual) por Unidade Consumidora Anual."
+ },
+ {
+  "termo": "COMPENSAÇÃO DE DIC MENSAL",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DIC (Duração de Interrupção Individual) por Unidade Consumidora Mensal."
+ },
+ {
+  "termo": "COMPENSAÇÃO DE DIC MENSAL (-)",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DIC (Duração de Interrupção Individual) por Unidade Consumidora Mensal."
+ },
+ {
+  "termo": "COMPENSACAO DE DIC TRIMESTRAL",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DIC (Duração de Interrupção Individual) por Unidade Consumidora Trimestral."
+ },
+ {
+  "termo": "COMPENSACAO DE DIC TRIMESTRAL (-)",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DIC (Duração de Interrupção Individual) por Unidade Consumidora Trimestral."
+ },
+ {
+  "termo": "COMPENSAÇÃO DE DICRI",
+  "definicao": "Representa o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DICRI (Duração de Interrupção Individual Ocorrida em Um Dia Critico)."
+ },
+ {
+  "termo": "COMPENSAÇÃO DE DMIC",
+  "definicao": "Representa o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DMIC (Duração Máxima de Interrupção Contínua) por Unidade Consumidora"
+ },
+ {
+  "termo": "COMPENSAÇÃO DE DMIC (-)",
+  "definicao": "Representa o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DMIC (Duração Máxima de Interrupção Contínua) por Unidade Consumidora"
+ },
+ {
+  "termo": "COMPENSAÇÃO DE DRP E DRC (-)",
+  "definicao": "Representa o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente aos indicadores DRP (Duração Relativa De Tensão Precária) e/ou DRC (Duração Relativa De Tensão Crítica) por Unidade Consumidora"
+ },
+ {
+  "termo": "COMPENSACAO DE FIC ANUAL",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador FIC (Frequência de Interrupção Individual) por Unidade Consumidora Anual."
+ },
+ {
+  "termo": "COMPENSACAO DE FIC ANUAL (-)",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador FIC (Frequência de Interrupção Individual) por Unidade Consumidora Anual."
+ },
+ {
+  "termo": "COMPENSAÇÃO DE FIC MENSAL",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador FIC (Frequência de Interrupção Individual) por Unidade Consumidora Mensal."
+ },
+ {
+  "termo": "COMPENSAÇÃO DE FIC MENSAL (-)",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador FIC (Frequência de Interrupção Individual) por Unidade Consumidora Mensal."
+ },
+ {
+  "termo": "COMPENSACAO DE FIC TRIMESTRAL",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador FIC (Frequência de Interrupção Individual) por Unidade Consumidora Trimestral."
+ },
+ {
+  "termo": "COMPENSACAO DE FIC TRIMESTRAL (-)",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador FIC (Frequência de Interrupção Individual) por Unidade Consumidora Trimestral."
+ },
+ {
+  "termo": "CONSUMO FP (Grupo A)",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário fora de ponta."
+ },
+ {
+  "termo": "CONSUMO FP (Grupo B)",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário fora de ponta."
+ },
+ {
+  "termo": "CONSUMO FP D",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário fora de ponta."
+ },
+ {
+  "termo": "CONSUMO FP SEM CONTRATO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário fora de ponta."
+ },
+ {
+  "termo": "CONSUMO HI",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário Intermediário."
+ },
+ {
+  "termo": "CONSUMO HR (Grupo A)",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário reservado."
+ },
+ {
+  "termo": "CONSUMO HR (Grupo B)",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário reservado."
+ },
+ {
+  "termo": "CONSUMO HR D",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário reservado."
+ },
+ {
+  "termo": "CONSUMO HR SEM CONTRATO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário reservado."
+ },
+ {
+  "termo": "CONSUMO KWH (ACORDO/ART.129)",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo recuperado conforme REN 414/2010 - Art.129."
+ },
+ {
+  "termo": "CONSUMO KWH (ARTIGO 115)",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo recuperado conforme REN 414/2010 - Art.115."
+ },
+ {
+  "termo": "CONSUMO KWH + ICMS/PIS/COFINS",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal."
+ },
+ {
+  "termo": "CONSUMO KWH BR + ICMS/PIS/COFINS",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal tarifa Baixa Renda."
+ },
+ {
+  "termo": "CONSUMO P (Grupo A)",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário de ponta."
+ },
+ {
+  "termo": "CONSUMO P (Grupo B)",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário de ponta."
+ },
+ {
+  "termo": "CONSUMO P D",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário de ponta."
+ },
+ {
+  "termo": "CONSUMO P SEM CONTRATO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário de ponta."
+ },
+ {
+  "termo": "CONSUMO SEM CONTRATO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal."
+ },
+ {
+  "termo": "CONTR.SOC.S/LUCRO LIQ.(1,0%) LEI 9430(-)",
+  "definicao": "Representa o valor em R$ referente à CSSL - Contribuição Social sobre o Lucro Líquido retido conforme pela Lei 9.430."
+ },
+ {
+  "termo": "CONTRIB. ILUMINAÇÃO PÚBLICA - MUNICIPAL",
+  "definicao": "Representa o valor em R$ da contribuição de CIP - Contribuição Iluminação Pública, calculada de acordo com a Lei Municipal, conforme previsto na Resolução Normativa 414\\ANEEL\\2010."
+ },
+ {
+  "termo": "CRÉDITO DE CONSUMO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) sobre devolução de consumo conforme REN 414/2010 - Art.113."
+ },
+ {
+  "termo": "CRÉDITO DE CONSUMO BR",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) para os clientes baixa renda sobre devolução de consumo conforme REN 414/2010 - Art.113."
+ },
+ {
+  "termo": "CRÉDITO DE CONSUMO FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) sobre devolução de consumo no horário fora de ponta conforme REN 414/2010 - Art.113."
+ },
+ {
+  "termo": "CRÉDITO DE CONSUMO HI",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) sobre devolução de consumo no horário intermediário conforme REN 414/2010 - Art.113."
+ },
+ {
+  "termo": "CRÉDITO DE CONSUMO HR",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) sobre devolução de consumo no horário reservado conforme REN 414/2010 - Art.113."
+ },
+ {
+  "termo": "CRÉDITO DE CONSUMO P",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) sobre devolução de consumo no horário de ponta conforme REN 414/2010 - Art.113."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC1",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC12",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC15",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC16",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC17",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC18",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC19",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC2",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC20",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC21",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC24",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC3",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC4",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC6",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC8",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREDITO SEC. CIDAD. E TRABALHO (-)CSC9",
+  "definicao": "Valor em R$ referente a crédito da Secretaria Cidadania e Trabalho."
+ },
+ {
+  "termo": "CREFAZ - 08000525051",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro CREFAZ, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "CUSTO ADMINISTRATIVO - ARTIGO 131 - PRC",
+  "definicao": "Valor em R$ referente a custo administrativo de inspeção conforme REN 414/2010 - Art.131."
+ },
+ {
+  "termo": "CUSTO EQUIP.MEDIÇÃO MONOFÁSICO",
+  "definicao": "Valor em R$ referente a custo de equipamento de medição (monofásico) conforme REN 414/2010 - Art. 167."
+ },
+ {
+  "termo": "CUSTO EQUIP.MEDIÇÃO TRIFÁSICO",
+  "definicao": "Valor em R$ referente a custo de equipamento de medição (trifásico) conforme REN 414/2010 - Art. 167."
+ },
+ {
+  "termo": "CUSTOS ADICIONAIS DE LIG. PROVISÓRIA",
+  "definicao": "Valor em R$ referente a custos adicionais de ligação provisória conforme REN 414/2010."
+ },
+ {
+  "termo": "DADOS DE MEDIÇÃO - MEMÓRIA DE MASSA",
+  "definicao": "Valor em R$ referente a solicitação efetuada pelo consumidor dos dados de memória de massa do medidor conforme REN 414/2010 - Art. 102."
+ },
+ {
+  "termo": "DEMANDA",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA CATIVO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA D",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA EXCEDENTE CONTRATADA",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a diferença da demanda contratada - demanda medida (kW) sem ICMS (Judicial)."
+ },
+ {
+  "termo": "DEMANDA FORA PONTA",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) no horário fora de ponta conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) no horário fora de ponta conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA FP LIVRE",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) no horário fora de ponta conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA FP SEM CONTRATO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) no horário fora de ponta conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA GERAÇÃO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa (kW) das Usinas Geradoras, Autoprodutores e Produtores Independentes, não aplicáveis a Geração Distribuída (REN 482/2012)."
+ },
+ {
+  "termo": "DEMANDA LIVRE",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) no horário fora de ponta conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA LIVRE PCH100",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) com desconto de 100% previsto para clientes ACL (Ambiente de Contratação Livre) por adquirir energia de fonte incentivada conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA LIVRE PCH50",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) com desconto de 50% previsto para clientes ACL (Ambiente de Contratação Livre) por adquirir energia de fonte incentivada conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA LIVRE PCH50 FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) com desconto de 50% previsto para clientes ACL (Ambiente de Contratação Livre) por adquirir energia de fonte incentivada conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA LIVRE PCH50 P",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) com desconto de 50% previsto para clientes ACL (Ambiente de Contratação Livre) por adquirir energia de fonte incentivada conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA P",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) no horário de ponta conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA P LIVRE",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) no horário de ponta conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA P SEM CONTRATO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) no horário de ponta conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA PONTA",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) no horário de ponta conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA PROP.",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda de potência ativa faturável (kW) no encerramento de contrato conforme REN 414/2010."
+ },
+ {
+  "termo": "DEMANDA RC FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda faturada (kW) por ocasião da indisponibilidade ou redução de geração, no horário fora de ponta das unidades de Autoprodutor ou Produtor Independente de Energia Elétrica."
+ },
+ {
+  "termo": "DEMANDA RC P",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda fatura (kW) por ocasião da indisponibilidade ou redução de geração, no horário de ponta das unidades de Autoprodutor ou Produtor Independente de Energia Elétrica."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de potência ativa medidos excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM CATIVO 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de potência ativa medidos excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM FP 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de potência ativa medidos no horário fora de ponta excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM FP LIVRE 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de potência ativa medidos no horário fora de ponta excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM FP SEM CONTRATO 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de potência ativa medidos no horário fora de ponta excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM GERAÇÃO 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes demanda de potência ativa (kW) das Usinas Geradoras, Autoprodutores e Produtores Independentes excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM LIVRE 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de potência ativa medidos excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM P 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de potência ativa medidos no horário de ponta excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM P LIVRE 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de potência ativa medidos no horário de ponta excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM P SEM CONTRATO 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de potência ativa medidos no horário de ponta excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM RC FP 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de reserva apurados no horário fora de ponta excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DEMANDA ULTRAPASSAGEM SEM CONTRATO 2X",
+  "definicao": "Valor em R$ referente a aplicação de penalidade quando os montantes de demanda de potência ativa medidos excederem o limite de tolerância dos valores contratados."
+ },
+ {
+  "termo": "DESC TUSD CCEE (-) KW P - 06/20",
+  "definicao": "Valor em R$ referente ao ajuste de faturamento de cliente sujeito à desconto na tarifa de uso do sistema de distribuição onde é concedido o desconto prévio e recalculado com o desconto real definido pela CCEE (Câmara de Comercialização de Energia Elétrica)."
+ },
+ {
+  "termo": "DESC TUSD CCEE (-) KWH P L 06/20",
+  "definicao": "Valor em R$ referente ao ajuste de faturamento de cliente sujeito à desconto na tarifa de uso do sistema de distribuição onde é concedido o desconto prévio e recalculado com o desconto real definido pela CCEE (Câmara de Comercialização de Energia Elétrica)."
+ },
+ {
+  "termo": "DESC.TUSD CCEE (-) KW FP - 06/20",
+  "definicao": "Valor em R$ referente ao ajuste de faturamento de cliente sujeito à desconto na tarifa de uso do sistema de distribuição onde é concedido o desconto prévio e recalculado com o desconto real definido pela CCEE (Câmara de Comercialização de Energia Elétrica)."
+ },
+ {
+  "termo": "DESCONTO - NEGOCIAÇÃO DE DÍVIDA",
+  "definicao": "Valor em R$ referente a desconto concedido na negociação de dívida/parcelamento de débitos."
+ },
+ {
+  "termo": "DESCONTO 50% TUSD-GERAÇÃO",
+  "definicao": "Valor em R$ referente ao ajuste de faturamento de cliente sujeito à desconto na tarifa de uso do sistema de distribuição onde é concedido o desconto prévio e recalculado com o desconto real definido pela CCEE (Câmara de Comercialização de Energia Elétrica)."
+ },
+ {
+  "termo": "DESCONTO 67% IRRIGACAO E AQUICULTURA",
+  "definicao": "Valor em R$ referente ao benefício tarifário (desconto) concedido de acordo com a classe e atividade desenvolvida no local devidamente comprovada conforme legislação vigente."
+ },
+ {
+  "termo": "DESCONTO 80% IRRIGACAO E AQUICULTURA",
+  "definicao": "Valor em R$ referente ao benefício tarifário (desconto) concedido de acordo com a classe e atividade desenvolvida no local devidamente comprovada conforme legislação vigente."
+ },
+ {
+  "termo": "DESCONTO BAIXA RENDA 10%",
+  "definicao": "Valor em R$ referente ao benefício tarifário (desconto) concedido de acordo com a classe e atividade desenvolvida no local devidamente comprovada conforme legislação vigente."
+ },
+ {
+  "termo": "DESCONTO BAIXA RENDA 100%",
+  "definicao": "Valor em R$ referente ao benefício tarifário (desconto) concedido de acordo com a classe e atividade desenvolvida no local devidamente comprovada conforme legislação vigente."
+ },
+ {
+  "termo": "DESCONTO BAIXA RENDA 40%",
+  "definicao": "Valor em R$ referente ao benefício tarifário (desconto) concedido de acordo com a classe e atividade desenvolvida no local devidamente comprovada conforme legislação vigente."
+ },
+ {
+  "termo": "DESCONTO BAIXA RENDA 65%",
+  "definicao": "Valor em R$ referente ao benefício tarifário (desconto) concedido de acordo com a classe e atividade desenvolvida no local devidamente comprovada conforme legislação vigente."
+ },
+ {
+  "termo": "DESCONTO BX RENDA (0 A 220 KWH) 100%",
+  "definicao": "Valor em R$ referente ao benefício tarifário (desconto) concedido de acordo com a classe e atividade desenvolvida no local devidamente comprovada conforme legislação vigente."
+ },
+ {
+  "termo": "DESCONTO RURAL 08%",
+  "definicao": "Valor em R$ referente ao benefício tarifário (desconto) concedido de acordo com a classe e atividade desenvolvida no local devidamente comprovada conforme legislação vigente."
+ },
+ {
+  "termo": "DESCONTO SERVIÇO PÚBLICO 12%",
+  "definicao": "Valor em R$ referente ao benefício tarifário (desconto) concedido de acordo com a classe e atividade desenvolvida no local devidamente comprovada conforme legislação vigente."
+ },
+ {
+  "termo": "DESCONTO TARIFA APE",
+  "definicao": "Valor em R$ referente ao benefício tarifário (desconto) concedido as unidades Autoprodutores e Produtores Independentes de energia elétrica."
+ },
+ {
+  "termo": "DEV. CUSTO ADMINISTRATIVO - PRC (-)",
+  "definicao": "Valor em R$ referente a devolução do custo administrativo de inspeção conforme REN 414/2010 - Art.131."
+ },
+ {
+  "termo": "DEV. DIFERENÇA DE BAND TARIFÁRIA",
+  "definicao": "Devolução da diferença do adicional de bandeira tarifária em R$ faturado a maior no mês anterior, quando do acionamento do Sistema de Bandeiras tarifárias ."
+ },
+ {
+  "termo": "DEV. ICMS DIF. TARIFA BAIXA RENDA",
+  "definicao": "Devolução do ICMS da diferença do adicional de bandeira tarifária em R$ faturado a maior no mês anterior, quando do acionamento do Sistema de Bandeiras tarifárias ."
+ },
+ {
+  "termo": "DEV. INDIC. CONTINUIDADE DMIC - 2010",
+  "definicao": "Representa o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DMIC (Duração Máxima de Interrupção Contínua) por Unidade Consumidora"
+ },
+ {
+  "termo": "DEV. INDIC. CONTINUIDADE MENSAL - 2010",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador de Continuidade por Unidade Consumidora Mensal."
+ },
+ {
+  "termo": "DEV. INDIC. CONTINUIDADE MENSAL - DICRI",
+  "definicao": "Representa o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador DICRI (Duração de Interrupção Individual Ocorrida em Um Dia Crítico)."
+ },
+ {
+  "termo": "DEV. INDIC. CONTINUIDADE TRI - 2009",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador de Continuidade por Unidade Consumidora Trimestral."
+ },
+ {
+  "termo": "DEV. INDIC. CONTINUIDADE TRI - 2010",
+  "definicao": "Representava o valor em R$ creditado na fatura sempre que ocorrer violação em relação aos parâmetros fixados na legislação referente ao indicador de Continuidade por Unidade Consumidora Trimestral."
+ },
+ {
+  "termo": "DEVOL. ICMS - ADEQUAÇÃO ART. 113",
+  "definicao": "Valor em R$ referente a devolução de ICMS apurado no ajuste de faturamento conforme REN 414/2010 - Art. 113."
+ },
+ {
+  "termo": "DEVOL. ICMS COBRADO MAIOR (-)",
+  "definicao": "Valor em R$ referente a devolução de ICMS apurado no ajuste de faturamento conforme REN 414/2010."
+ },
+ {
+  "termo": "DEVOL. ICMS DECISÃO JUDICIAL (-)",
+  "definicao": "Valor em R$ referente a devolução de ICMS apurado no ajuste de faturamento realizado conforme Decisão Judicial."
+ },
+ {
+  "termo": "DEVOL. JUROS PG INDEVIDO",
+  "definicao": "Valor em R$ referente a devolução de juros cobrados."
+ },
+ {
+  "termo": "DEVOL. KWH - ADEQUAÇÃO ART. 113",
+  "definicao": "Valor em R$ referente a devolução de consumo (kWh) apurado no ajuste de faturamento conforme REN 414/2010 - Art. 113."
+ },
+ {
+  "termo": "DEVOL. MULTA PG. INDEVIDA - ATRASO PGTO",
+  "definicao": "Valor em R$ referente a devolução de multas por atraso cobradas."
+ },
+ {
+  "termo": "DEVOL. MULTA PG. INDEVIDA (-)",
+  "definicao": "Valor em R$ referente a devolução de multas cobradas."
+ },
+ {
+  "termo": "DEVOL. TAXA RELIGAÇÃO À REVELIA (-)",
+  "definicao": "Valor em R$ referente a devolução de taxa de religação à revelia cobradas."
+ },
+ {
+  "termo": "DEVOL. TAXA RELIGAÇÃO DISJUNTOR (-)",
+  "definicao": "Valor em R$ referente a devolução de taxa de religação no disjuntor cobradas."
+ },
+ {
+  "termo": "DEVOL. VAL. COBR. A MAIOR",
+  "definicao": "Valor em R$ referente a devolução de consumo (kWh/kW) apurado no ajuste de faturamento conforme REN 414/2010."
+ },
+ {
+  "termo": "DEVOLUCAO DE C.I.P (-)",
+  "definicao": "Valor em R$ referente a devolução de CIP (Contribuição Iluminação Pública) cobradas."
+ },
+ {
+  "termo": "DEVOLUÇÃO IGPM",
+  "definicao": "Valor em R$ referente a devolução de correção IGP-M cobradas."
+ },
+ {
+  "termo": "DEVOLUCAO TAXA INDEVIDA (-)",
+  "definicao": "Valor em R$ referente a devolução de taxas cobradas."
+ },
+ {
+  "termo": "DIF DESC TUSD CCEE(+) KW FP 06/20",
+  "definicao": "Valor em R$ referente ao ajuste de faturamento de cliente sujeito à desconto na tarifa de uso do sistema de distribuição onde é concedido o desconto prévio e recalculado com o desconto real definido pela CCEE (Câmara de Comercialização de Energia Elétrica)."
+ },
+ {
+  "termo": "DIF. ADICIONAL DE BANDEIRA RETROATIVO",
+  "definicao": "Valor em R$ referente a cobrança retroativa do adicional de bandeiras tarifárias."
+ },
+ {
+  "termo": "DIF. ICMS COBRADO A MENOR",
+  "definicao": "Valor em R$ referente a cobrança de ICMS apurado no ajuste de faturamento conforme REN 414/2010."
+ },
+ {
+  "termo": "DIF. MATERIAIS E MEDIDOR BI P/ TRI",
+  "definicao": "Valor em R$ referente ao custo da diferença de materiais e medidor de bifásico para trifásico cobrando conforme REN 414/2010."
+ },
+ {
+  "termo": "DIF. MATERIAIS E MEDIDOR MONO P/ BI",
+  "definicao": "Valor em R$ referente ao custo da diferença de materiais e medidor de monofásico para bifásico cobrando conforme REN 414/2010."
+ },
+ {
+  "termo": "DIF. MATERIAIS E MEDIDOR MONO P/ TRI",
+  "definicao": "Valor em R$ referente ao custo da diferença de materiais e medidor de monofásico para trifásico cobrando conforme REN 414/2010."
+ },
+ {
+  "termo": "DIF.DESC TUSD CCEE(+) KW P 06/20",
+  "definicao": "Valor em R$ referente ao ajuste de faturamento de cliente sujeito à desconto na tarifa de uso do sistema de distribuição onde é concedido o desconto prévio e recalculado com o desconto real definido pela CCEE (Câmara de Comercialização de Energia Elétrica)."
+ },
+ {
+  "termo": "DIF.DESC TUSD CCEE(+) KWH P 06/20",
+  "definicao": "Valor em R$ referente ao ajuste de faturamento de cliente sujeito à desconto na tarifa de uso do sistema de distribuição onde é concedido o desconto prévio e recalculado com o desconto real definido pela CCEE (Câmara de Comercialização de Energia Elétrica)."
+ },
+ {
+  "termo": "DIFERENÇA DE DEMANDA",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda (kW), cobrado de unidade consumidora faturada na classe rural ou reconhecida como Sazonal e que após 12 ciclos de faturamento não preencheu as condições da sazonalidade (REN 414/2010)."
+ },
+ {
+  "termo": "DIFERENÇA DE DEMANDA FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa prevista sobre a demanda (kW), cobrado de unidade consumidora faturada na classe rural ou reconhecida como Sazonal e que após 12 ciclos de faturamento não preencheu as condições da sazonalidade, no segmento fora de ponta (REN 414/2010)."
+ },
+ {
+  "termo": "DIFERENÇA VALOR COBRADO A MENOR",
+  "definicao": "Valor em R$ referente a diferença de valor cobrado a menor em meses anteriores."
+ },
+ {
+  "termo": "DMCR",
+  "definicao": "Valor em R$ referente a demanda de potência reativa excedente faturada."
+ },
+ {
+  "termo": "DMCR CALCULADA DEMO",
+  "definicao": "Valor demonstrativo (não cobrado) em R$ referente a demanda de potência reativa excedente a ser faturada caso o cliente não corrija o fator de potência."
+ },
+ {
+  "termo": "DMCR DEMONSTRATIVA",
+  "definicao": "Valor demonstrativo (não cobrado) em R$ referente a demanda de potência reativa excedente a ser faturada caso o cliente não corrija o fator de potência."
+ },
+ {
+  "termo": "DMCR DEMONSTRATIVA FP",
+  "definicao": "Valor demonstrativo (não cobrado) em R$ referente a demanda de potência reativa excedente a ser faturada caso o cliente não corrija o fator de potência no referido horário."
+ },
+ {
+  "termo": "DMCR DEMONSTRATIVA P",
+  "definicao": "Valor demonstrativo (não cobrado) em R$ referente a demanda de potência reativa excedente a ser faturada caso o cliente não corrija o fator de potência no referido horário."
+ },
+ {
+  "termo": "DMCR FP",
+  "definicao": "Valor em R$ referente a demanda de potência reativa excedente faturada, no horário fora de ponta."
+ },
+ {
+  "termo": "DMCR P",
+  "definicao": "Valor em R$ referente a demanda de potência reativa excedente faturada, no horário de ponta."
+ },
+ {
+  "termo": "DOAÇÃO LBV 0800-0555099",
+  "definicao": "Valor em R$ referente contribuição voluntária efetuada a LBV, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "DOAÇÃO LBV-TEL 08000555099",
+  "definicao": "Valor em R$ referente contribuição voluntária efetuada a LBV, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "DOAÇÃO LBV-TEL08000555099DEV",
+  "definicao": "Devolução de valor em R$ referente contribuição voluntária efetuada a LBV, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "DOACAO PASTORAL DA CRIANÇA - 0800 410084",
+  "definicao": "Valor em R$ referente contribuição voluntária efetuada a PASTORAL DA CRIANÇA, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "DUPLICIDADE DE PAGAMENTO",
+  "definicao": "Valor em R$ referente a devolução de pagamento em duplicidade de faturas anteriores."
+ },
+ {
+  "termo": "EASYCRÉDITO-EMPRÉST ONLINE 40072224",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro EASYCRÉDITO-EMPRÉST ONLINE, com vinculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "ECOENEL (-)",
+  "definicao": "Valor em R$ referente a ECOENEL creditado na fatura de energia elétrica."
+ },
+ {
+  "termo": "EMISSAO DE SEGUNDA VIA",
+  "definicao": "Valor em R$ referente a emissão de segunda via da fatura, quando solicitado junto a Distribuidora, conforme REN 414/2010 - Art. 102."
+ },
+ {
+  "termo": "ENERGIA ATIVA INJETADA",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre a energia injetada compensada no referido mês."
+ },
+ {
+  "termo": "ENERGIA ATIVA INJETADA FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre a energia injetada compensada no horário fora de ponta no referido mês."
+ },
+ {
+  "termo": "ENERGIA ATIVA INJETADA HI",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre a energia injetada compensada no horário intermediário no referido mês."
+ },
+ {
+  "termo": "ENERGIA ATIVA INJETADA HR",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre a energia injetada compensada no horário reservado no referido mês."
+ },
+ {
+  "termo": "ENERGIA ATIVA INJETADA P",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre a energia injetada compensada no horário de ponta no referido mês."
+ },
+ {
+  "termo": "ESTORNO DE DUPLICIDADE PAGAMENTO",
+  "definicao": "Valor em R$ referente a cobrança de devolução de pagamento em duplicidade creditado indevido."
+ },
+ {
+  "termo": "FORNEC DE PULSOS E SINCRONISMO GR A",
+  "definicao": "Valor em R$ referente a fornecimento de pulsos e sincronismo do medidor, quando solicitado junto a Distribuidora, conforme REN 414/2010 - Art. 102."
+ },
+ {
+  "termo": "GARANTIA TOP 0800 600 0560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro GARANTIA TOP, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "IMP.DE RENDA (1,2%)LEI 9430(-)",
+  "definicao": "Representa o valor em R$ referente à IMPOSTO DE RENDA retido conforme LEI 9.430."
+ },
+ {
+  "termo": "INDEN. VIOL. PRAZO ATENDIMENTO",
+  "definicao": "Valor em R$ referente a indenização por violação de prazo de atendimento, conforme REN 414/2010."
+ },
+ {
+  "termo": "INDENIZACAO CORTE INDEVIDO",
+  "definicao": "Valor em R$ referente a indenização por corte indevido, conforme REN 414/2010."
+ },
+ {
+  "termo": "INDENIZAÇÃO DE BENS",
+  "definicao": "Valor em R$ referente a indenização de bens, conforme legislação vigente."
+ },
+ {
+  "termo": "INDENIZAÇÃO POR CORTE INDEVIDO",
+  "definicao": "Valor em R$ referente a indenização por corte indevido, conforme REN 414/2010."
+ },
+ {
+  "termo": "JURO DE FINANCIAMENTO",
+  "definicao": "Valor em R$ referente a juros de financiamento oriundos de parcelamento de débitos."
+ },
+ {
+  "termo": "JUROS ATRASO DE PAGAMENTO",
+  "definicao": "Valor em R$ referente a juros por atraso no pagamento."
+ },
+ {
+  "termo": "JUROS ATRASO DE PAGAMENTO NEG",
+  "definicao": "Valor em R$ referente a juros por atraso no pagamento de negociação de débitos"
+ },
+ {
+  "termo": "JUROS DE DEV. VALORES FATUR. A MAIOR",
+  "definicao": "Valor em R$ referente a juros de devolução de pagamento a maior em meses anteriores."
+ },
+ {
+  "termo": "KW RETROATIVO FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo (kW) retroativo apurado no horário fora de ponta."
+ },
+ {
+  "termo": "KW RETROATIVO FP ULTRA",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo (kW) retroativo apurado no horário fora de ponta (ultrapassagem)."
+ },
+ {
+  "termo": "KWH RETROATIVO FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo (kWh) retroativo apurado no horário fora de ponta."
+ },
+ {
+  "termo": "KWH RETROATIVO H.RES.",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo (kWh) retroativo apurado no horário reservado."
+ },
+ {
+  "termo": "KWH RETROATIVO I.P.",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo (kWh) retroativo apurado para classe Iluminação Pública."
+ },
+ {
+  "termo": "KWH RETROATIVO P",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo (kWh) retroativo apurado no horário de ponta."
+ },
+ {
+  "termo": "LAR SEGURO BÁSICO- 08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro LAR SEGURO BÁSICO, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "LAR SEGURO PLUS 08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro LAR SEGURO PLUS, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "LBV-INFORMAÇÕES 0800 0555099",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro LBV- INFORMAÇÕES, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "LBV-INFORMAÇÕES 0800 0555099 DEV",
+  "definicao": "Devolução do valor referente ao produto contratado pelo cliente junto ao parceiro LBV-INFORMAÇÕES, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "LIGACAO A REVELIA",
+  "definicao": "Valor em R$ referente a cobrança de taxa de ligação a revelia (auto-religação), conforme REN 414/2010 - Art. 175."
+ },
+ {
+  "termo": "LIGACAO A REVELIA (TD)",
+  "definicao": "Valor em R$ referente a cobrança de taxa de ligação a revelia (auto-religação), conforme REN 414/2010 - Art. 175."
+ },
+ {
+  "termo": "LIGAÇÃO A REVELIA DISJUNTOR",
+  "definicao": "Valor em R$ referente a cobrança de taxa de ligação a revelia no disjuntor (auto-religação), conforme REN 414/2010 - Art. 175."
+ },
+ {
+  "termo": "MULTA(S) ATRASO DE PAGAMENTO",
+  "definicao": "Valor em R$ referente a multa por atraso no pagamento conforme REN 414/2010."
+ },
+ {
+  "termo": "MULTA(S) ATRASO DE PAGAMENTO NEG",
+  "definicao": "Valor em R$ referente a multa por atraso no pagamento de negociação de débitos."
+ },
+ {
+  "termo": "NOSSO ODONTO - 08000205648",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro NOSSO ODONTO, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "NOSSO ODONTO - 08000205648 - DEVOLUÇÃO",
+  "definicao": "Devolução do valor referente ao produto contratado pelo cliente junto ao parceiro NOSSO ODONTO, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "ODONTO SYSTEM 0800 071 7110",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro ODONTO SYSTEM, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "ODONTOGROUP - 0800 704 3663",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro ODONTOGROUP, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "ODONTOGROUP - 0800 704 3663 - DEV",
+  "definicao": "Devolução do valor referente ao produto contratado pelo cliente junto ao parceiro ODONTOGROUP, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "PAGAMENTO A MAIOR",
+  "definicao": "Valor em R$ referente a devolução pagamento a maior realizado no mês anterior."
+ },
+ {
+  "termo": "PAGAMENTO A MENOR",
+  "definicao": "Valor em R$ referente a cobrança de pagamento a menor realizado no mês anterior."
+ },
+ {
+  "termo": "PARCELA ACUMULO KWH",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre parcela de consumo ativo em kWh apurados conforme a REN 414/2010 - Art. 113."
+ },
+ {
+  "termo": "PARCELA ACUMULO KWH FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre parcela de consumo ativo em kWh no horário fora de ponta apurados conforme a REN 414/2010 - Art. 113."
+ },
+ {
+  "termo": "PARCELA ACUMULO KWH HI",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre parcela de consumo ativo em kWh no horário intermediário apurados conforme a REN 414/2010 - Art. 113."
+ },
+ {
+  "termo": "PARCELA ACUMULO KWH HR",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre parcela de consumo ativo em kWh no horário reservado apurados conforme a REN 414/2010 - Art. 113."
+ },
+ {
+  "termo": "PARCELA ACUMULO KWH P",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre parcela de consumo ativo em kWh no horário de ponta apurados conforme a REN 414/2010 - Art. 113."
+ },
+ {
+  "termo": "PARCELA ACUMULO UFER FP",
+  "definicao": "Valor em R$ referente a energia reativa excedente (kWh) no horário fora de ponta apurados conforme a REN 414/2010 - Art. 113."
+ },
+ {
+  "termo": "PARCELA ACUMULO UFER P",
+  "definicao": "Valor em R$ referente a energia reativa excedente (kWh) no horário de ponta apurados conforme a REN 414/2010 - Art. 113."
+ },
+ {
+  "termo": "PARCELA TE FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + Tributos sobre parcela de consumo ativo em kWh no horário fora de ponta."
+ },
+ {
+  "termo": "PARCELA TE FP CATIVO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + Tributos sobre parcela de consumo ativo em kWh no horário fora de ponta."
+ },
+ {
+  "termo": "PARCELA TE HR",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + Tributos sobre parcela de consumo ativo em kWh no horário reservado."
+ },
+ {
+  "termo": "PARCELA TE P",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + Tributos sobre parcela de consumo ativo em kWh no horário de ponta."
+ },
+ {
+  "termo": "PARCELA TE P CATIVO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + Tributos sobre parcela de consumo ativo em kWh no horário de ponta."
+ },
+ {
+  "termo": "PARCELA TE P RC",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de energia (TE) + Tributos sobre parcela de consumo (reserva de capacidade) em kWh no horário de ponta."
+ },
+ {
+  "termo": "PARCELA TUSD FP CATIVO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário fora de ponta."
+ },
+ {
+  "termo": "PARCELA TUSD FP LIVRE",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário fora de ponta."
+ },
+ {
+  "termo": "PARCELA TUSD P CATIVO",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário de ponta."
+ },
+ {
+  "termo": "PARCELA TUSD P LIVRE",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário de ponta."
+ },
+ {
+  "termo": "PARCELA TUSD P LIVRE PCH 100",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário de ponta, com desconto de 100% previsto para clientes ACL (Ambiente de Contratação Livre) por adquirir energia de fonte incentivada conforme REN 414/2010."
+ },
+ {
+  "termo": "PARCELA TUSD P LIVRE PCH 50",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo mensal apurado no horário de ponta, com desconto de 50% previsto para clientes ACL (Ambiente de Contratação Livre) por adquirir energia de fonte incentivada conforme REN 414/2010."
+ },
+ {
+  "termo": "PARCELA TUSD RC FP",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre parcela de consumo (reserva de capacidade) em kWh no horário fora de ponta."
+ },
+ {
+  "termo": "PARCELA TUSD RC P",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre parcela de consumo (reserva de capacidade) em kWh no horário de ponta."
+ },
+ {
+  "termo": "PARCELAMENTO DEBITO - PRC",
+  "definicao": "Valor em R$ referente a parcela de débitos oriundos de negociação de dívidas."
+ },
+ {
+  "termo": "PIS/PASEP (0,65 %)LEI 9430 (-)",
+  "definicao": "Representa o valor em R$ referente à PIS/PASEP retido conforme pela Lei 9.430."
+ },
+ {
+  "termo": "PORTOCRED - 08006000777",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro PORTOCRED, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "PROTEÇÃO 360-08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro PROTEÇÃO 360, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "PROTEÇÃO 360-08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro PROTEÇÃO 360, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "RELIGAÇÃO NORMAL",
+  "definicao": "Valor em R$ referente a solicitação efetuada pelo consumidor para religação de sua unidade consumidora conforme REN 414/2010 - Art. 102."
+ },
+ {
+  "termo": "RELIGAÇÃO NORMAL DISJUNTOR",
+  "definicao": "Valor em R$ referente a solicitação efetuada pelo consumidor para religação no disjuntor de sua unidade consumidora conforme REN 414/2010 - Art. 102."
+ },
+ {
+  "termo": "RELIGAÇÃO PROGRAMADA",
+  "definicao": "Valor em R$ referente a solicitação efetuada pelo consumidor para religação programada de sua unidade consumidora conforme REN 414/2010 - Art. 102."
+ },
+ {
+  "termo": "RELIGAÇÃO URGENCIA",
+  "definicao": "Valor em R$ referente a solicitação efetuada pelo consumidor para religação em carácter de urgência de sua unidade consumidora conforme REN 414/2010 - Art. 102."
+ },
+ {
+  "termo": "RESOLVE XPRESS PLUS08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro RESOLVE XPRESS PLUS, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "RESOLVE XPRESS-08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro RESOLVE XPRESS, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "RESSARCIMENTO DE INVESTIMENTO",
+  "definicao": "Valor em R$ referente a ressarcimento de investimentos."
+ },
+ {
+  "termo": "RESSARCIMENTO DE INVESTIMENTO - PARC.",
+  "definicao": "Valor em R$ referente a ressarcimento de investimentos."
+ },
+ {
+  "termo": "RESSARCIMENTO ECO ENEL",
+  "definicao": "Valor em R$ referente a ressarcimento do ECO ENEL."
+ },
+ {
+  "termo": "RESSARCIMENTO POR DANOS ELÉTRICOS",
+  "definicao": "Valor em R$ referente a ressarcimento de danos elétricos."
+ },
+ {
+  "termo": "SERVIÇOS PRESTADOS-PFJ/EDE/ODS",
+  "definicao": "Valor em R$ referente a cobrança de serviços prestados."
+ },
+ {
+  "termo": "SIMÕES DISTRIBUIDORA - (83)33225585",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro SIMÕES DISTRIBUIDORA, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "SIMÕES DISTRIBUIDORA - (83)33225585 - DE",
+  "definicao": "Devolução do valor referente ao produto contratado pelo cliente junto ao parceiro SIMÕES DISTRIBUIDORA, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "SUDAMED - 08009701005",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro SUDAMED, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "TAXA DE AFERICAO DE MEDIDOR",
+  "definicao": "Valor em R$ referente a solicitação efetuada pelo consumidor para aferição do medidor de sua unidade consumidora conforme REN 414/2010 - Art. 102."
+ },
+ {
+  "termo": "TAXA(S) DE LIGACAO PROVISORIA",
+  "definicao": "Valor em R$ referente a solicitação efetuada pelo consumidor para Ligação Provisória conforme REN 414/2010 - Art. 52."
+ },
+ {
+  "termo": "TAXA(S) END. ALTERNATIVO",
+  "definicao": "Valor em R$ referente ao custo adicional de entrega da fatura em endereço alternativo."
+ },
+ {
+  "termo": "TAXA(S) VISTORIA UNIDADE CONSUMIDORA",
+  "definicao": "Valor em R$ referente ao custo de vistoria de sua unidade consumidora conforme REN 414/2010 - Art. 102."
+ },
+ {
+  "termo": "UFER DEMONSTRATIVO FORA DE PONTA",
+  "definicao": "Valor demonstrativo (não cobrado) em R$ referente a energia reativa excedente (kWh) no horário fora de ponta a ser faturada caso o cliente não corrija o fator de potência no referido horário."
+ },
+ {
+  "termo": "UFER DEMONSTRATIVO HORÁRIO RESERVADO",
+  "definicao": "Valor demonstrativo (não cobrado) em R$ referente a energia reativa excedente (kWh) no horário reservado a ser faturada caso o cliente não corrija o fator de potência no referido horário."
+ },
+ {
+  "termo": "UFER DEMONSTRATIVO PONTA",
+  "definicao": "Valor demonstrativo (não cobrado) em R$ referente a energia reativa excedente (kWh) no horário de ponta a ser faturada caso o cliente não corrija o fator de potência no referido horário."
+ },
+ {
+  "termo": "UFER FP",
+  "definicao": "Valor em R$ referente a energia reativa excedente (kWh) no horário fora de ponta."
+ },
+ {
+  "termo": "UFER HR",
+  "definicao": "Valor em R$ referente a energia reativa excedente (kWh) no horário reservado."
+ },
+ {
+  "termo": "UFER P",
+  "definicao": "Valor em R$ referente a energia reativa excedente (kWh) no horário de ponta."
+ },
+ {
+  "termo": "USE&COMPRE 0800 878 8222",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro USE&COMPRE, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VAL CUST CONEXAO DISTRIBUICAO GERADOR",
+  "definicao": "Valor em R$ referente ao custo de conexão a rede de distribuição cobrado dos clientes geradores."
+ },
+ {
+  "termo": "VAL CUSTO CONEXAO DISTRIBUICAO",
+  "definicao": "Valor em R$ referente ao custo de conexão a rede de distribuição cobrado dos clientes ACL (Ambiente de Contratação Livre)."
+ },
+ {
+  "termo": "VALOR ACUMULADO MES PASSADO",
+  "definicao": "Valor em R$ referente a fatura acumulada no mês anterior (pelo baixo valor) e cobrado no mês atual."
+ },
+ {
+  "termo": "VALOR ACUMULADO P/PROXIMO MES",
+  "definicao": "Valor em R$ referente a fatura acumulada no mês atual (pelo baixo valor) o qual será cobrado na próxima fatura."
+ },
+ {
+  "termo": "VALOR CORRECAO IGPM",
+  "definicao": "Valor em R$ referente a correção pelo IGP-M."
+ },
+ {
+  "termo": "VALOR CORRECAO IGPM - ART. 115 E 129",
+  "definicao": "Valor em R$ referente a correção pelo IGP-M oriundo dos ajustes conforme Art. 115 e 129 (REN 414/2010)"
+ },
+ {
+  "termo": "VALOR CORRECAO IGPM NEGOCIACAO",
+  "definicao": "Valor em R$ referente a correção pelo IGP-M oriundo de negociação de dívida."
+ },
+ {
+  "termo": "VALOR DIC/FIC PAGO INDEVIDO (-)",
+  "definicao": "Valor em R$ referente a indenização de transgressão de DIC/FIC pagos indevidamente."
+ },
+ {
+  "termo": "VALOR FINANCIAMENTO (11) 3717-6444",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro VALOR FINANCIAMENTO, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VALOR KW RETROAT. PONTA",
+  "definicao": "Valor em R$ referente a aplicação da tarifa de uso do sistema de distribuição (TUSD) + Tributos sobre o consumo (kW) retroativo apurado no horário de ponta."
+ },
+ {
+  "termo": "VIDA GARANTIDA FAMILIAR 08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro VIDA GARANTIDA FAMILIAR, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VIDA GARANTIDA INDIVIDUAL 08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro VIDA GARANTIDA INDIVIDUAL, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VIDA PLENA- 0800 600 0560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro VIDA PLENA, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VIDA PREMIUM CART BENEF 08002757030 DEV",
+  "definicao": "Devolução do valor referente ao produto contratado pelo cliente junto ao parceiro VIDA PREMIUM CART BENEF, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VIDA PREMIUM CARTÃO DE BENEF 08002757030",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro VIDA PREMIUM CART BENEF, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VISITA TECNICA",
+  "definicao": "Valor em R$ referente a cobrança de visita técnica conforme legislação vigente."
+ },
+ {
+  "termo": "VIVA TRANQUILO - 08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro VIVA TRANQUILO, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VIVA TRANQUILO PLUS - 08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro VIVA TRANQUILO PLUS, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VIVER BEM FAMILIAR 08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro VIVER BEM FAMILIAR, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VIVER BEM INDIVIDUAL 08006000560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro VIVER BEM INDIVIDUAL, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ },
+ {
+  "termo": "VIVER SEGURO - 0800 600 0560",
+  "definicao": "Produto contratado pelo cliente junto ao parceiro VIVER SEGURO, com vínculo de cobrança e arrecadação via fatura de energia elétrica."
+ }
+]

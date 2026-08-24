@@ -182,6 +182,23 @@ bruto (mais `razao_social`/`cnpj`/`cep`/`municipio`/`uf`).
 > que volte a trazer `DEMANDA CONTRATADA (kW)` tem esse campo ignorado (com
 > aviso), sem risco de duas fontes divergirem para o mesmo conceito.
 
+### Versão web (GitHub Pages)
+
+Há uma versão que roda **no navegador**, em `docs/` — o mesmo núcleo de
+extração (`faturas_app.core`) executado com [Pyodide](https://pyodide.org)
+(CPython em WebAssembly). Os PDFs não saem da máquina de quem usa: não há
+servidor.
+
+```powershell
+python build\sync_web.py     # sincroniza docs/py/ com src/ (rode a cada mudança no núcleo)
+```
+
+Publicar: **Settings → Pages → Deploy from a branch → pasta `/docs`**.
+
+Não cobre **faturas CHESP escaneadas** (dependem de OCR/Tesseract, sem build
+WebAssembly) nem **borderôs** (dependem do PyMuPDF, idem). Detalhes em
+[docs/LEIA-ME.md](docs/LEIA-ME.md).
+
 ### Hardcodes por planilha (`core/hardcodes.py`)
 
 Hardcodes são regras "SE → ENTÃO" que consertam dados errados **na origem**
