@@ -86,13 +86,16 @@ def test_operadores_de_texto_e_vazio():
     assert list(df["obs"]) == ["BANDEIRA", "x"]
 
 
-def test_hardcodes_padrao_sao_validos():
-    """Os hardcodes que acompanham o app precisam estar completos."""
-    padrao = hardcodes.padrao()
-    assert padrao, "resources/hardcodes_padrao.json não foi carregado"
-    for r in padrao:
-        assert hardcodes.resumo_texto(r) != "(regra incompleta)", r["nome"]
-        assert r["aba"] in hardcodes.abas_disponiveis(), r["aba"]
+def test_nenhum_hardcode_acompanha_o_app():
+    """
+    O app NÃO traz regra embutida — nos dois domínios.
+
+    As regras que vinham embutidas eram do TJGO, e embarcá-las impunha as
+    correções de uma instituição a todo mundo que instalasse o programa. Cada
+    instituição importa as suas por planilha.
+    """
+    assert hardcodes.padrao("faturas") == []
+    assert hardcodes.padrao("borderos") == []
 
 
 def test_caminho_saida_padrao():

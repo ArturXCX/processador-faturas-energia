@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Processador de Faturas de Energia — versão web</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#fff; --texto:#16202a; --suave:#5c6b7a;
+    --borda:#dde3e9; --azul:#1f6fb2; --azul-esc:#17568a;
+    --ok:#1a7f45; --erro:#b3261e; --aviso:#8a6100;
+    --log-bg:#11181f; --log-fg:#b8e6c8;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{--bg:#12181e; --card:#1a222b; --texto:#e6edf3; --suave:#9bacbd;
+          --borda:#2b3742; --azul:#4a9fe0; --azul-esc:#78bdf0;
+          --ok:#4ec27f; --erro:#f08a80; --aviso:#e0b050;
+          --log-bg:#0b1014; --log-fg:#a9dcbd;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--texto);
+       font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:900px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:26px;margin:0 0 4px}
+  .sub{color:var(--suave);margin:0 0 6px}
+  .card{background:var(--card);border:1px solid var(--borda);border-radius:12px;
+        padding:18px 20px;margin:16px 0}
+  h2{font-size:15px;margin:0 0 10px;letter-spacing:.02em}
+  label{display:block;font-size:13px;color:var(--suave);margin:10px 0 4px}
+  select,input[type=text]{width:100%;padding:9px 10px;border:1px solid var(--borda);
+        border-radius:8px;background:var(--bg);color:var(--texto);font:inherit}
+  button{background:var(--azul);color:#fff;border:0;border-radius:8px;
+         padding:11px 18px;font:inherit;font-weight:600;cursor:pointer}
+  button:hover:not(:disabled){background:var(--azul-esc)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.sec{background:transparent;color:var(--azul);border:1px solid var(--borda)}
+  #zona{border:2px dashed var(--borda);border-radius:10px;padding:26px;text-align:center;
+        color:var(--suave);cursor:pointer;transition:.15s}
+  #zona:hover,#zona.on{border-color:var(--azul);color:var(--azul)}
+  #lista{margin-top:10px;max-height:190px;overflow:auto;font-size:13px}
+  #lista div{padding:3px 0;border-bottom:1px solid var(--borda)}
+  .barra{height:8px;background:var(--borda);border-radius:99px;overflow:hidden;margin:10px 0}
+  .barra i{display:block;height:100%;width:0;background:var(--azul);transition:width .2s}
+  pre#log{background:var(--log-bg);color:var(--log-fg);padding:12px;border-radius:8px;
+       font-size:12px;max-height:280px;overflow:auto;white-space:pre-wrap;margin:0}
+  .aviso{background:color-mix(in srgb,var(--aviso) 12%,transparent);
+         border-left:3px solid var(--aviso);padding:10px 14px;border-radius:0 8px 8px 0;
+         font-size:13.5px;margin:14px 0}
+  .ok{color:var(--ok)} .erro{color:var(--erro)}
+  .linha{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:.9em}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Processador de Faturas de Energia</h1>
+  <p class="sub">Versão <strong>web</strong> — roda inteiramente no seu navegador.</p>
+  <p class="sub" style="font-size:13px">
+    Seus PDFs <strong>não são enviados a lugar nenhum</strong>: o processamento
+    acontece na sua máquina, dentro da aba, via WebAssembly.
+  </p>
+
+  <div class="aviso" id="limites">
+    <strong>O que esta versão não faz</strong> (use o aplicativo desktop para isso):
+    <ul style="margin:6px 0 0 18px;padding:0">
+      <li><strong>Faturas CHESP escaneadas</strong> — precisam de OCR (Tesseract),
+          que não roda no navegador. São detectadas e listadas, não processadas.</li>
+      <li><strong>Borderôs</strong> — a leitura por coordenadas usa PyMuPDF, que
+          não tem versão WebAssembly.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>1. Distribuidora e arquivos</h2>
+    <label for="forn">Distribuidora dos PDFs selecionados</label>
+    <select id="forn">
+      <option value="EQUATORIAL">EQUATORIAL</option>
+      <option value="CHESP">CHESP (só as que têm texto — sem OCR)</option>
+    </select>
+    <label>PDFs</label>
+    <div id="zona">Clique aqui ou arraste os PDFs<br>
+      <span style="font-size:12.5px">pode selecionar vários de uma vez</span></div>
+    <input type="file" id="arquivos" accept="application/pdf" multiple hidden>
+    <div id="lista"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. Processar</h2>
+    <div class="linha">
+      <button id="btn" disabled>Carregando o motor…</button>
+      <button id="baixar" class="sec" disabled>⇩ Baixar planilha (.xlsx)</button>
+      <span id="resumo" class="sub" style="margin:0"></span>
+    </div>
+    <div class="barra"><i id="prog"></i></div>
+    <pre id="log">Preparando o ambiente Python (isso leva alguns segundos na primeira vez)…</pre>
+  </div>
+
+  <p class="sub" style="font-size:12.5px">
+    Mesmo núcleo de extração do aplicativo desktop
+    (<code>faturas_app.core</code>), executado com
+    <a href="https://pyodide.org">Pyodide</a>.
+  </p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.28.0/full/pyodide.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

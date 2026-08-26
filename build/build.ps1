@@ -43,6 +43,28 @@ if (-not (Test-Path (Join-Path $appLocal "FaturasDeEnergia.exe"))) {
   throw "Executavel nao gerado em $appLocal"
 }
 
+# O pacote precisa ser AUTOSSUFICIENTE: quem recebe o .zip nao deve instalar
+# nada (em especial o Tesseract, usado no OCR das faturas CHESP escaneadas).
+# Sem esta conferencia, um build feito com a pasta tesseract/ incompleta
+# geraria um .zip que so falha na maquina do usuario, ao abrir a 1a fatura
+# escaneada. Falhar aqui e muito mais barato.
+Write-Host "==> Conferindo se o pacote esta autossuficiente..."
+$obrigatorios = @(
+  "_internal\tesseract\tesseract.exe",
+  "_internal\tesseract\tessdata\por.traineddata",
+  "_internal\faturas_app\resources\glossario_itens.json",
+  "_internal\app.ico"
+)
+$faltando = @()
+foreach ($rel in $obrigatorios) {
+  if (-not (Test-Path (Join-Path $appLocal $rel))) { $faltando += $rel }
+}
+if ($faltando.Count -gt 0) {
+  throw ("Pacote incompleto - faltando:`n  " + ($faltando -join "`n  ") +
+         "`nRode build\fetch_tesseract.ps1 e refaca o build.")
+}
+Write-Host "OK pacote autossuficiente (OCR + recursos embutidos)"
+
 # Inclui o guia do usuario na pasta distribuida, se existir.
 $leia = Join-Path $root "LEIA-ME.txt"
 if (Test-Path $leia) { Copy-Item $leia $appLocal -Force }

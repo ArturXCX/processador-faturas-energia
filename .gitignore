@@ -12,6 +12,7 @@ build/*
 !build/fetch_tesseract.ps1
 !build/backup.ps1
 !build/make_icon.py
+!build/sync_web.py
 !build/faturas.spec
 !build/installer.iss
 !build/app.ico

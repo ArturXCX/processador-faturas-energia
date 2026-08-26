@@ -316,10 +316,14 @@ class AbaHardcodes(ctk.CTkFrame):
             rod, text="📂  Aplicar sobre uma planilha…", width=230,
             command=self._aplicar_planilha)
         self.btn_planilha.grid(row=1, column=0, sticky="w")
+        ctk.CTkButton(rod, text="⇩  Importar de planilha…", width=180,
+                      command=self._importar_planilha).grid(row=1, column=1, padx=(8, 0))
+        ctk.CTkButton(rod, text="⇧  Exportar para planilha…", width=190,
+                      command=self._exportar_planilha).grid(row=1, column=2, padx=(8, 8))
         ctk.CTkButton(rod, text="➕  Novo hardcode", command=self._novo).grid(
-            row=1, column=1, padx=(8, 8))
+            row=1, column=3, padx=(0, 8))
         ctk.CTkButton(rod, text="💾  Salvar hardcodes", height=36,
-                      command=self._salvar).grid(row=1, column=2)
+                      command=self._salvar).grid(row=1, column=4)
 
         # ── cabeçalho ────────────────────────────────────────────────────
         top = ctk.CTkFrame(self, fg_color="transparent")
@@ -354,6 +358,82 @@ class AbaHardcodes(ctk.CTkFrame):
         c.grid(row=len(self.cartoes), column=0, sticky="ew", padx=6, pady=6)
         self.cartoes.append(c)
         return c
+
+    # ── importação / exportação por planilha ─────────────────────────────
+    def _exportar_planilha(self):
+        """Grava as regras da tela numa planilha — backup e MODELO de importação."""
+        caminho = filedialog.asksaveasfilename(
+            title="Exportar hardcodes para planilha",
+            defaultextension=".xlsx", initialfile="hardcodes.xlsx",
+            filetypes=[("Planilha Excel", "*.xlsx")])
+        if not caminho:
+            return
+        try:
+            n = hardcodes.exportar_planilha(caminho, self._regras(), self._dominio)
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Erro", f"Não foi possível exportar:\n{e}")
+            return
+        self.lbl_status.configure(
+            text=f"✅ {n} hardcode(s) exportado(s) para: {caminho}")
+
+    def _importar_planilha(self):
+        """
+        Importa regras de uma planilha. Mostra ANTES o que foi entendido (e o
+        que foi ignorado) e pergunta se deve SUBSTITUIR tudo ou ACRESCENTAR às
+        regras já existentes — importar não pode apagar trabalho por engano.
+        """
+        caminho = filedialog.askopenfilename(
+            title="Selecione a planilha de hardcodes",
+            filetypes=[("Planilha ou CSV", "*.xlsx *.xlsm *.csv")])
+        if not caminho:
+            return
+        try:
+            regras, relatorio = hardcodes.importar_planilha(caminho, self._dominio)
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Erro", f"Não foi possível importar o arquivo:\n{e}")
+            return
+        if not regras:
+            messagebox.showwarning("Atenção",
+                                   "Nenhuma regra válida encontrada no arquivo.\n\n"
+                                   + "\n".join(relatorio))
+            return
+
+        atuais = len(self.cartoes)
+        resumo = "\n".join(relatorio)
+        if atuais:
+            resp = messagebox.askyesnocancel(
+                "Importar hardcodes",
+                f"{resumo}\n\n"
+                f"Você já tem {atuais} hardcode(s) na tela.\n\n"
+                f"SIM = substituir tudo pelos importados\n"
+                f"NÃO = acrescentar aos que já existem\n"
+                f"CANCELAR = não importar")
+            if resp is None:
+                return
+            substituir = bool(resp)
+        else:
+            if not messagebox.askyesno("Importar hardcodes",
+                                       f"{resumo}\n\nImportar?"):
+                return
+            substituir = True
+
+        if substituir:
+            # limpeza em lote: `_remover` pede confirmação por cartão, o que
+            # renderia uma pergunta para cada regra existente.
+            for c in list(self.cartoes):
+                c.destroy()
+            self.cartoes.clear()
+        existentes = {r.get("id") for r in self._regras()}
+        novos = 0
+        for r in regras:
+            if not substituir and r.get("id") in existentes:
+                r = dict(r, id=r["id"] + "_2")
+            self._add_cartao(r)
+            novos += 1
+        self.lbl_status.configure(
+            text=f"✅ {novos} hardcode(s) importado(s) "
+                 f"({'substituindo' if substituir else 'somando'}). "
+                 f"Confira e clique em 'Salvar hardcodes'.")
 
     def _novo(self):
         c = self._add_cartao(hardcodes.regra_vazia(dominio=self._dominio))
@@ -436,11 +516,7 @@ class AbaHardcodes(ctk.CTkFrame):
             self.lbl_status.configure(text="⚠ Falha ao aplicar os hardcodes.")
             messagebox.showerror("Erro", f"Falha ao aplicar os hardcodes:\n{payload}")
             return
-        self.lbl_status.configure(text="✅ Planilha gerada.\n" + "\n".join(payload))
-        if messagebox.askyesno("Pronto",
-                               f"Planilha salva em:\n{saida}\n\n"
-                               + "\n".join(payload) + "\n\nDeseja abrir agora?"):
-            try:
-                os.startfile(saida)  # type: ignore[attr-defined]
-            except Exception:
-                pass
+        # Sem pop-up de "deseja abrir agora?": o caminho e o resumo já ficam
+        # visíveis no rótulo de status da própria tela.
+        self.lbl_status.configure(
+            text="✅ Planilha gerada em: " + str(saida) + "\n" + "\n".join(payload))

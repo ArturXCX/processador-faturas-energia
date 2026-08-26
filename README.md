@@ -1,10 +1,11 @@
 # Processador de Faturas de Energia (Equatorial / CHESP)
 
 Aplicativo desktop (Windows) que converte PDFs de faturas de energia em uma
-planilha Excel com 5 abas (`fatura`, `cliente`, `itens_fatura`, `impostos`,
-`medicao`), permite editar/renomear colunas e abas, e concatenar novas faturas a
-uma planilha já existente. Distribuído como executável — o usuário final **não
-precisa de Python instalado**.
+planilha Excel estruturada (`fatura`, `unidade_consumidora`, `itens_fatura`,
+`tarifas`, `impostos`, `medicao`, as abas resumidas e o `glossario`), permite
+editar/renomear colunas e abas, e concatenar novas faturas a uma planilha já
+existente. Distribuído como executável — o usuário final **não precisa de
+Python instalado**.
 
 ## 📥 Download
 
@@ -118,10 +119,22 @@ Dois formatos de distribuição são gerados em `dist\`:
   extraídas do bloco "INFORMAÇÕES DO SCEE" (só em UCs do SCEE; vazias nas demais):
   `scee_saldo_kwh_total` (número único após "SALDO KWH:" ou o valor de "ATV:") e
   `scee_saldo_kwh_P` / `_FP` / `_HR` (formato por posto "P=…, FP=…, HR=…").
-- Abas **derivadas** (em `dataset.py`, via `BASE_SHEETS`/`DERIVED_SHEETS`):
-  - `fatura_resumida` — **primeira aba**; subconjunto de `fatura`.
+- Abas **derivadas** (via `BASE_SHEETS`/`DERIVED_SHEETS`):
+  - `fatura_resumida` — **primeira aba**; subconjunto de `fatura` (`dataset.py`).
   - `medicao_resumida` — `medicao` filtrada na grandeza `ENERGIA GERAÇÃO - KWH`,
-    com `Consumo kWh` renomeado para `energia_geracao_kwh`.
+    com `Consumo kWh` renomeado para `energia_geracao_kwh` (`dataset.py`).
+  - `tarifas` — tabela de referência com a linha do tempo das tarifas: 1 linha
+    por (`fornecedor`, `item`, `tarifa_unitaria_r$`), na competência em que a
+    combinação apareceu pela primeira vez. Bandeira tarifária e itens sem tarifa
+    ficam de fora. Calculada em `derivados.py` (precisa de `item_normalizado` e
+    de `fornecedor`, que só existem depois de `Dataset.to_dataframes()`).
+- `unidade_consumidora` traz, além do que vem do PDF, **28 colunas do dicionário
+  oficial de UCs** (unidade judiciária, comarca, endereço, medidor atual,
+  rateios…) e a coluna **`id_uc_canonico`**, que une o histórico da mesma UC real
+  mesmo quando o número muda de formato. Ver "Dicionário de UCs" abaixo.
+- `demanda_contratada_kw` / `demanda_geracao_contratada_kw` ficam **vazias**
+  quando a fatura não traz o campo de grandezas contratadas (antes gravavam `0`);
+  `0` só quando a fatura imprime esse valor.
 - Medição (Equatorial): a "Leitura Anterior" é **opcional** no parse — linhas em
   que essa célula vem vazia no PDF (ex.: `DEMANDA GERAÇÃO - KW`/`FORA PONTA`) não
   são mais perdidas.
@@ -130,6 +143,87 @@ Dois formatos de distribuição são gerados em `dist\`:
 
 Ambas as abas têm um campo "Nome do arquivo" (placeholder `faturas_energia`) que
 define o nome sugerido ao salvar.
+
+### Identificação das Unidades Consumidoras (`core/dicionario_uc.py`)
+
+Há **duas metodologias**, escolhidas na aba **Parâmetros** (a escolha fica
+salva). Existem porque um dicionário oficial é o cadastro de **uma**
+instituição — sem essa opção, o app só serviria para ela:
+
+| Metodologia | Como identifica a UC | Cadastro |
+|---|---|---|
+| **Com dicionário (JSON)** | `id_uc_canonico` = UC do cadastro oficial | 28 colunas vindas do JSON |
+| **Sem dicionário (pelo medidor)** | `id_uc_canonico` = UC inferida pelo **medidor** | só o que vem do PDF |
+
+Na metodologia **sem dicionário** (padrão, e comportamento clássico do app) as
+28 colunas de cadastro **não são criadas** — a planilha não vem cheia de coluna
+vazia de um cadastro que não é da sua instituição.
+
+O número da UC impresso na fatura **não é estável no tempo**: o formato mudou
+historicamente (`10008414082` → `2.742.876.012-19`, mesma UC) e a reconciliação
+por medidor quebra quando a UC troca de medidor. É esse problema que a
+metodologia **com dicionário** resolve — o app extrai do PDF apenas o `id_uc`
+bruto (mais `razao_social`/`cnpj`/`cep`/`municipio`/`uf`).
+
+- **Nada vem embutido**: o app não acompanha cadastro de nenhuma instituição.
+  Instalação nova nasce na metodologia **sem dicionário**.
+- **Importação tolerante**: aba **Parâmetros → "Importar novo dicionário
+  (.json)"**. O JSON não precisa usar os rótulos de nenhuma instituição
+  específica — `id_uc`/`unidade_consumidora`/`instalacao`, `orgao`/`unidade`,
+  `endereco`, `municipio`, `distribuidora`… são reconhecidos por sinônimo.
+  Aceita lista de objetos, objeto embrulhando a lista (`{"ucs": [...]}`) ou
+  objeto indexado pela UC. O app mostra o que entendeu ANTES de aplicar.
+- Importar um cadastro liga a metodologia por dicionário automaticamente, grava
+  em `%APPDATA%\FaturasEnergia\dicionario_uc.json` e alimenta `id_uc_canonico`
+  e as 28 colunas de cadastro de `unidade_consumidora`.
+
+> A **demanda contratada** nunca vem do dicionário — sempre da fatura do mês.
+> O mapeamento campo→coluna é uma tabela explícita, então um dicionário futuro
+> que volte a trazer `DEMANDA CONTRATADA (kW)` tem esse campo ignorado (com
+> aviso), sem risco de duas fontes divergirem para o mesmo conceito.
+
+### Versão web (GitHub Pages)
+
+Há uma versão que roda **no navegador**, em `docs/` — o mesmo núcleo de
+extração (`faturas_app.core`) executado com [Pyodide](https://pyodide.org)
+(CPython em WebAssembly). Os PDFs não saem da máquina de quem usa: não há
+servidor.
+
+```powershell
+python build\sync_web.py     # sincroniza docs/py/ com src/ (rode a cada mudança no núcleo)
+```
+
+Publicar: **Settings → Pages → Deploy from a branch → pasta `/docs`**.
+
+Não cobre **faturas CHESP escaneadas** (dependem de OCR/Tesseract, sem build
+WebAssembly) nem **borderôs** (dependem do PyMuPDF, idem). Detalhes em
+[docs/LEIA-ME.md](docs/LEIA-ME.md).
+
+### Hardcodes por planilha (`core/hardcodes.py`)
+
+Hardcodes são regras "SE → ENTÃO" que consertam dados errados **na origem**
+(erro da concessionária ao emitir a fatura). O app **não traz nenhuma regra
+embutida** — as que existiam eram do TJGO, e embarcá-las impunha as correções
+de uma instituição a todo mundo.
+
+Cada instituição mantém as suas por planilha, na aba **Hardcodes**:
+
+- **⇧ Exportar para planilha** — backup e, principalmente, **modelo**: exporte
+  para ver o formato exato.
+- **⇩ Importar de planilha** — lê `.xlsx`/`.xlsm`/`.csv`, mostra o que entendeu
+  e pergunta se deve **substituir** tudo ou **acrescentar**.
+
+Formato: duas abas ligadas pelo `id`, porque uma regra é uma árvore (grupos ×
+condições + ações) e não cabe numa linha só.
+
+| aba `hardcodes` (1 linha por condição) | aba `acoes` (1 linha por ação) |
+|---|---|
+| `id · nome · aba · ativo · grupo · ligacao · coluna · operador · valor` | `id · coluna · valor` |
+
+A leitura é tolerante: cabeçalhos casam sem acento/maiúsculas, o operador aceita
+o código (`igual`) ou o rótulo da tela ("é igual a"), `ativo` aceita
+sim/não/true/false/1/0, e o que faltar recebe padrão. O que não for entendido
+vira aviso no relatório, não erro.
 
 ### Aba de glossário (`core/glossario.py`)
 

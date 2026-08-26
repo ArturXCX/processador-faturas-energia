@@ -35,6 +35,9 @@ A lógica de extração foi portada dos notebooks originais em `scripts_og/`.
 - **Tesseract (OCR) embutido:** `tesseract\` (~46 MB, montado por `build\fetch_tesseract.ps1`)
 - **Build LOCAL do PyInstaller:** `%LOCALAPPDATA%\FaturasBuild\` (ver §7)
 - **Dados do usuário (equivalências):** `%APPDATA%\FaturasEnergia\equivalencias.json`
+- **Dicionário de UCs (só existe se importado):** `%APPDATA%\FaturasEnergia\dicionario_uc.json`
+- **Metodologia de UC escolhida:** `%APPDATA%\FaturasEnergia\config_uc.json`
+- **Hardcodes do usuário:** `%APPDATA%\FaturasEnergia\hardcodes.json` (nenhum vem embutido)
 
 ---
 
@@ -93,16 +96,40 @@ o medidor da linha é inferido pela `id_fatura` (medidor daquela fatura na aba
 `medicao`); na `unidade_consumidora`, pelo medidor da UC. Se a regra desejada for
 outra, ajustar em `core/derivados.py::_colunas_medidor`.
 
+**TODO adiado de propósito:** `schema.DEDUP_KEYS["unidade_consumidora"]` continua
+`["id_uc"]`, não `["id_uc_canonico"]`. Migrar corrigiria a fragmentação de UCs que
+mudaram de formato no meio do histórico, mas **reduziria a contagem de linhas** da
+aba em relação às planilhas já publicadas/usadas em dashboards. Está documentado
+como comentário no próprio `schema.py`, junto de `DEDUP_KEYS`.
+
 ---
 
 ## 5. Esquema atual das abas (ordem e colunas exatas)
 
 Ordem de saída: `fatura_resumida → fatura → unidade_consumidora → itens_fatura →
-impostos → medicao → medicao_resumida → glossario` (+ aba oculta `_faturas_meta`).
+tarifas → impostos → medicao → medicao_resumida → glossario` (+ aba oculta
+`_faturas_meta`).
 
 Em TODA aba com `id_uc`, logo após ele vêm sempre, nesta ordem:
-`id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format`
-(inseridas programaticamente — ver nota abaixo).
+`id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format,
+id_uc_canonico` (inseridas programaticamente — ver nota abaixo).
+
+**`id_uc_canonico`** é a coluna recomendada para agrupar por UC. O que ela
+contém depende da **metodologia escolhida** na aba Parâmetros
+(`dicionario_uc.modo()`, persistida em `%APPDATA%\FaturasEnergia\config_uc.json`):
+
+- **`MODO_DICIONARIO`**: vem do **dicionário oficial**
+  (`core/dicionario_uc.py`) e une o histórico da mesma UC real mesmo quando o
+  `id_uc` mudou de formato (`10008414082` → `2.742.876.012-19`) ou o medidor foi
+  trocado — casos em que `id_uc_atual_medidor` falha. UC fora do dicionário cai
+  para o valor inferido pelo medidor.
+- **`MODO_MEDIDOR`** (PADRÃO): comportamento CLÁSSICO, para instituições sem
+  cadastro oficial — `id_uc_canonico` recebe o valor inferido pelo medidor e
+  **as 28 colunas do dicionário não são criadas**. O dicionário nem é lido.
+  É o padrão porque o app **não embarca cadastro nenhum**: instalação nova não
+  tem dicionário até alguém importar um.
+
+`id_uc_atual_medidor` (heurística por medidor) é mantido como está nas duas.
 
 **fatura**: id_fatura, numero_fatura, arquivo_pdf, link_pdf, fornecedor, id_uc,
 id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format, medidor,
@@ -115,17 +142,44 @@ scee_saldo_kwh_FP, scee_saldo_kwh_HR, data_leitura_anterior, data_leitura_atual,
 numero_dias_leitura, data_proxima_leitura
 
 **unidade_consumidora** (renomeada de `cliente`): id_uc, id_uc_sem_format,
-id_uc_atual_medidor, id_uc_atual_medidor_sem_format, razao_social, cnpj, cep,
-municipio, uf, primeira_competencia, ultima_competencia, primeira_fatura,
-ultima_fatura *(sem competencia — é caso à parte)*. **1 linha por UC**: a aba
-acumula 1 linha por fatura processada e leva um `drop_duplicates()` ao final
-(derivados.py) — como os dados cadastrais e os agregados primeira/ultima_* são
-iguais para todas as faturas da mesma UC, sobra 1 linha por UC.
+id_uc_atual_medidor, id_uc_atual_medidor_sem_format, id_uc_canonico,
+razao_social, cnpj, cep, municipio, uf, **+ 28 colunas do dicionário oficial**
+(id_uc_dicionario, id_uc_dicionario_sem_format, id_uc_antigo_dicionario,
+id_uc_aneel_bordero, uc_operante, medidores_utilizados_dicionario,
+medidor_atual_dicionario, unidade_judiciaria, uj_uc_at_bt_gd, concessionaria,
+endereco_dicionario, comarca, grupo_fornecimento_at_bt,
+limite_fornecimento_tensao, possui_geracao_distribuida, participa_rateio,
+e_gerador_rateio, e_beneficiaria_rateio, rateio_comum,
+rateio_ufv_cachoeira_dourada, percentual_rateio, demanda_alterada,
+demanda_futura_kw, protocolo_alteracao_demanda, saldo_scee_cadastro_kwh,
+prioridade_rateio, gd_sem_rateio, usina_fotovoltaica_cachoeira_dourada),
+primeira_competencia, ultima_competencia, primeira_fatura, ultima_fatura
+*(sem competencia — é caso à parte)*. **1 linha por UC**: a aba acumula 1 linha
+por fatura processada e leva um `drop_duplicates()` ao final (derivados.py) —
+como os dados cadastrais e os agregados primeira/ultima_* são iguais para todas
+as faturas da mesma UC, sobra 1 linha por UC.
+
+> As 28 colunas de cadastro vêm de `core/dicionario_uc.py`. O app NÃO embarca
+> cadastro nenhum: o arquivo é importado pela aba Parâmetros e fica em
+> `%APPDATA%\FaturasEnergia\dicionario_uc.json`. `razao_social`/`cnpj`/`cep`/`municipio`/`uf` continuam vindo do
+> PDF. **Demanda contratada NUNCA vem do dicionário** — só da fatura do mês.
+> Os booleanos são gravados como True/False nativos (não "Sim"/"Não").
+> `primeira/ultima_*` agora agregam por `id_uc_canonico`, não por `id_uc`.
 
 **itens_fatura**: id_fatura, id_uc, id_uc_sem_format, id_uc_atual_medidor,
 id_uc_atual_medidor_sem_format, competencia, item, item_normalizado, tipo,
 unidade, quantidade, preco_unitario_com_tributos_r$, valor_r$, pis_cofins,
 base_calc_icms_r$, aliquota_icms_r$, icms, tarifa_unitaria_r$
+
+**tarifas** *(aba NOVA, derivada de `itens_fatura`)*: fornecedor, competencia,
+item, tipo, unidade, preco_unitario_com_tributos_r$, tarifa_unitaria_r$,
+item_normalizado. Tabela de REFERÊNCIA (não tem id_fatura nem id_uc): 1 linha
+por (fornecedor, item, tarifa_unitaria_r$), na competência em que a combinação
+apareceu pela **primeira** vez. Fora: bandeira tarifária (item contém "BAND") e
+linhas sem `tarifa_unitaria_r$` (elimina os itens financeiros). Recalculada do
+zero no processamento **e** na concatenação (`derivados._derivar_tarifas`) —
+concatenar um backfill antigo pode mudar qual linha é "a mais antiga", então a
+aba nunca é deduplicada de forma incremental. ~593 linhas no acervo completo.
 
 **impostos**: id_fatura, id_uc, id_uc_sem_format, id_uc_atual_medidor,
 id_uc_atual_medidor_sem_format, competencia, Tributo, Base (R$), Aliquota (%),
@@ -178,8 +232,17 @@ Núcleo (`src/faturas_app/core/`, sem GUI):
 - `excel_io.py` — escrita estilizada + metadados / leitura.
 - `concat.py` — concatenação com remapeamento canônico + dedup.
 - `derivados.py` — colunas recalculadas do zero: unidade_consumidora.(primeira|ultima)_*,
-  id_uc_atual_medidor(+sem_format), medidor (fatura/fatura_resumida), item_normalizado
-  (`aplicar` no processamento, `aplicar_concat` na concatenação).
+  id_uc_atual_medidor(+sem_format), id_uc_canonico + as 28 colunas do dicionário,
+  medidor (fatura/fatura_resumida), item_normalizado e a aba `tarifas` inteira
+  (`aplicar` no processamento, `aplicar_concat` na concatenação). **A ORDEM das
+  chamadas em `_calcular` importa**: `_colunas_medidor` → `_enriquecer_dicionario_uc`
+  → `_extremos_por_uc` (que agora agrupa por `id_uc_canonico`) → `_item_normalizado`
+  → `_derivar_tarifas` → `_tipo_fornecimento_upper` → `_reordenar_canonico`.
+- `dicionario_uc.py` — cadastro OFICIAL de UCs: resolve o `id_uc` em qualquer
+  formato (índice por dígitos sobre UC/UC VELHA/UC FORMATADO) e devolve as 28
+  colunas cadastrais. Sem semente embutida: o cadastro é importado pela aba
+  Parâmetros (`%APPDATA%\FaturasEnergia\dicionario_uc.json`), com casamento
+  tolerante de nomes de campo (`analisar`).
 - `equivalencias.py` — tabela item→item_normalizado (JSON em %APPDATA%).
 - `links.py` — coluna link_pdf. `glossario.py` — aba glossario. `build_info.py` — carimbo.
 - `controller.py` — orquestra o processamento das pastas (progresso/cancelar).
@@ -254,13 +317,49 @@ Reverter: extraia o `.zip` por cima de `app_faturas`.
 - **CHESP "Modelo 6"** (jan–mai/2022, 18 faturas): o corpo fica na PÁGINA 1
   (a pg 0 só tem o cabeçalho); parser próprio em `chesp._extrair_itens_modelo6`.
   Os preços do Modelo 6 NÃO embutem tributos — o item "TRIBUTOS (PIS/COFINS)"
-  (impresso na própria fatura) fecha a soma com o total.
+  (impresso na própria fatura) fecha a soma com o total. A **demanda contratada**
+  desse layout vem no cabeçalho (`DEMANDA CONTR.: 60`), fora do bloco
+  `GRANDEZAS CONTRATADAS` do layout colorido — regex próprio, como 3ª tentativa,
+  em `chesp.extrair_fatura_chesp`. O "CONTR" é o que separa esse rótulo da linha
+  do ITEM "DEMANDA 60 18,92000 1.135,20" mais adiante na mesma fatura.
+- **Demanda contratada ausente = NULO, não 0** (`demanda_contratada_kw` /
+  `demanda_geracao_contratada_kw`, EQ e CHESP): 0 é um valor que a fatura pode
+  imprimir de verdade, então usá-lo como "ausente" apagava a diferença entre
+  "a fatura não tem o campo" e "a fatura diz 0". **Reprocessar do zero** para
+  corrigir planilhas antigas — concatenar não reescreve linha já existente.
 - **CHESP OCR**: unidades ruidosas ("kWwh"/"kWw") toleradas; `_valor_confiavel`
   recalcula valor=qtd×preço quando o impresso destoa (vírgula perdida/dígito
   trocado) e o preço é crível vs a tarifa. Validação 15/07: 198/198 CHESP e
   99,86%+ EQ reconciliadas.
 - **FATURAS_SELFCHECK** é o arquivo de SAÍDA do relatório (o app ESCREVE nele) —
   nunca apontar para um arquivo que não possa ser sobrescrito.
+- **Nada de dados de instituição embutidos no app.** Não existem mais
+  `resources/hardcodes_padrao.json` nem `resources/dicionario_uc.json`: eram do
+  TJGO e iam para todo mundo que instalasse. `hardcodes.padrao()` devolve `[]`
+  sempre, e o dicionário só existe se o usuário importar. Não voltar a semear.
+- **Identidade do borderô vem do CONTEÚDO, não do nome do arquivo.** O parser
+  antigo trazia `4000000225` (o código de agrupamento do TJGO) escrito no regex
+  do NOME — renomear o PDF zerava a identidade. Hoje número, competência,
+  vencimento e código saem do cabeçalho impresso; o nome é último recurso.
+  EXCEÇÃO conhecida: em todo 2022 e jan–set/2023 a marca da concessionária não
+  está no texto (cabeçalho é imagem), então ali a `distribuidora` vem mesmo do
+  nome do arquivo. O layout da tabela NÃO serve de substituto — jun–set/2023
+  são borderôs da EQUATORIAL ainda no template da ENEL.
+- **Borderô: competência é `AAAA-MM` e vencimento `AAAA-MM-DD`** (eram
+  `MM/AAAA` e `dd/mm/aaaa`), para cruzar com a planilha de faturas.
+- **Pós-processamento NÃO roda na thread da interface.** `to_dataframes` +
+  `derivados` + `hardcodes` + `Perfil` são proporcionais ao LOTE inteiro: com
+  10 mil faturas isso levava minutos e, rodando na thread do Tk, a janela
+  parava de responder logo após o último PDF — parecia travamento no último
+  arquivo, mas era o laço de eventos bloqueado. Fica em thread própria
+  (`tab_processar._pos_processar`); não voltar a chamar direto do `_poll`.
+- **Consulta ao dicionário é por id_uc DISTINTO, não por linha.** São ~400 UCs
+  para dezenas de milhares de linhas; consultar por linha dominava o tempo do
+  pós-processamento.
+- **Texto colado no fim da linha de medição** (Equatorial): o pdfplumber gruda
+  texto legal ("CONFORME REN. ANEEL 414/10.") no fim da linha. Por isso os
+  padrões de linha truncada usam um lookahead "não vem outro número depois"
+  (`FIM`) em vez de âncora de fim de linha — não voltar a usar `$` ali.
 
 ---
 
