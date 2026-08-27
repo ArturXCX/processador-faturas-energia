@@ -35,8 +35,8 @@ A lógica de extração foi portada dos notebooks originais em `scripts_og/`.
 - **Tesseract (OCR) embutido:** `tesseract\` (~46 MB, montado por `build\fetch_tesseract.ps1`)
 - **Build LOCAL do PyInstaller:** `%LOCALAPPDATA%\FaturasBuild\` (ver §7)
 - **Dados do usuário (equivalências):** `%APPDATA%\FaturasEnergia\equivalencias.json`
-- **Dicionário de UCs (só existe se importado):** `%APPDATA%\FaturasEnergia\dicionario_uc.json`
-- **Metodologia de UC escolhida:** `%APPDATA%\FaturasEnergia\config_uc.json`
+- **Mapa de UCs (só existe se importado):** `%APPDATA%\FaturasEnergia\mapa_uc.json`
+- **Identificação por medidor (lig/desl):** `%APPDATA%\FaturasEnergia\config_uc.json`
 - **Hardcodes do usuário:** `%APPDATA%\FaturasEnergia\hardcodes.json` (nenhum vem embutido)
 
 ---
@@ -114,22 +114,20 @@ Em TODA aba com `id_uc`, logo após ele vêm sempre, nesta ordem:
 `id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format,
 id_uc_canonico` (inseridas programaticamente — ver nota abaixo).
 
-**`id_uc_canonico`** é a coluna recomendada para agrupar por UC. O que ela
-contém depende da **metodologia escolhida** na aba Parâmetros
-(`dicionario_uc.modo()`, persistida em `%APPDATA%\FaturasEnergia\config_uc.json`):
+**`id_uc_canonico`** é a coluna recomendada para agrupar por UC — mas ela **só
+existe quando há um MAPA DE UCs importado** (`core/dicionario_uc.py`). Ela traz
+a UC canônica do cadastro, que une o histórico da mesma UC real mesmo quando o
+`id_uc` mudou de formato (`10008414082` → `2.742.876.012-19`) ou o medidor foi
+trocado — casos em que `id_uc_atual_medidor` falha. UC fora do mapa cai para o
+valor inferido pelo medidor (quando essa identificação está ligada).
 
-- **`MODO_DICIONARIO`**: vem do **dicionário oficial**
-  (`core/dicionario_uc.py`) e une o histórico da mesma UC real mesmo quando o
-  `id_uc` mudou de formato (`10008414082` → `2.742.876.012-19`) ou o medidor foi
-  trocado — casos em que `id_uc_atual_medidor` falha. UC fora do dicionário cai
-  para o valor inferido pelo medidor.
-- **`MODO_MEDIDOR`** (PADRÃO): comportamento CLÁSSICO, para instituições sem
-  cadastro oficial — `id_uc_canonico` recebe o valor inferido pelo medidor e
-  **as 28 colunas do dicionário não são criadas**. O dicionário nem é lido.
-  É o padrão porque o app **não embarca cadastro nenhum**: instalação nova não
-  tem dicionário até alguém importar um.
+Sem mapa: nenhuma aba tem `id_uc_canonico` e a aba `unidade_consumidora` não
+recebe coluna nenhuma de cadastro.
 
-`id_uc_atual_medidor` (heurística por medidor) é mantido como está nas duas.
+A **identificação histórica por medidor** (`id_uc_atual_medidor`,
+`id_uc_atual_medidor_sem_format`, `id_uc_atual`) é opcional quando há mapa:
+desligada na aba Parâmetros, as três não são criadas em aba nenhuma. Sem mapa
+ela é a única identificação que existe e fica sempre ligada.
 
 **fatura**: id_fatura, numero_fatura, arquivo_pdf, link_pdf, fornecedor, id_uc,
 id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format, medidor,
@@ -143,28 +141,21 @@ numero_dias_leitura, data_proxima_leitura
 
 **unidade_consumidora** (renomeada de `cliente`): id_uc, id_uc_sem_format,
 id_uc_atual_medidor, id_uc_atual_medidor_sem_format, id_uc_canonico,
-razao_social, cnpj, cep, municipio, uf, **+ 28 colunas do dicionário oficial**
-(id_uc_dicionario, id_uc_dicionario_sem_format, id_uc_antigo_dicionario,
-id_uc_aneel_bordero, uc_operante, medidores_utilizados_dicionario,
-medidor_atual_dicionario, unidade_judiciaria, uj_uc_at_bt_gd, concessionaria,
-endereco_dicionario, comarca, grupo_fornecimento_at_bt,
-limite_fornecimento_tensao, possui_geracao_distribuida, participa_rateio,
-e_gerador_rateio, e_beneficiaria_rateio, rateio_comum,
-rateio_ufv_cachoeira_dourada, percentual_rateio, demanda_alterada,
-demanda_futura_kw, protocolo_alteracao_demanda, saldo_scee_cadastro_kwh,
-prioridade_rateio, gd_sem_rateio, usina_fotovoltaica_cachoeira_dourada),
+razao_social, cnpj, cep, municipio, uf, **+ as colunas do MAPA DE UCs que
+estiverem carregadas** (do template: id_uc_aneel_bordero, uc_operante, medidor_atual_dicionario, unidade_institucional, endereco_dicionario, participa_rateio, demanda_futura_kw; mais as colunas extras
+que a importação tiver criado),
 primeira_competencia, ultima_competencia, primeira_fatura, ultima_fatura
 *(sem competencia — é caso à parte)*. **1 linha por UC**: a aba acumula 1 linha
 por fatura processada e leva um `drop_duplicates()` ao final (derivados.py) —
 como os dados cadastrais e os agregados primeira/ultima_* são iguais para todas
 as faturas da mesma UC, sobra 1 linha por UC.
 
-> As 28 colunas de cadastro vêm de `core/dicionario_uc.py`. O app NÃO embarca
-> cadastro nenhum: o arquivo é importado pela aba Parâmetros e fica em
-> `%APPDATA%\FaturasEnergia\dicionario_uc.json`. `razao_social`/`cnpj`/`cep`/`municipio`/`uf` continuam vindo do
-> PDF. **Demanda contratada NUNCA vem do dicionário** — só da fatura do mês.
-> Os booleanos são gravados como True/False nativos (não "Sim"/"Não").
-> `primeira/ultima_*` agora agregam por `id_uc_canonico`, não por `id_uc`.
+> As colunas de cadastro vêm do MAPA DE UCs importado
+> (`core/dicionario_uc.py`). O app NÃO embarca nenhum: sem mapa, a aba não
+> recebe nenhuma delas nem `id_uc_canonico`. Item do template não mapeado
+> na importação também não vira coluna. `razao_social`/`cnpj`/`cep`/
+> `municipio`/`uf` continuam vindo do PDF. **Demanda contratada NUNCA vem
+> do mapa** — só da fatura. Booleanos como True/False nativos.
 
 **itens_fatura**: id_fatura, id_uc, id_uc_sem_format, id_uc_atual_medidor,
 id_uc_atual_medidor_sem_format, competencia, item, item_normalizado, tipo,
@@ -232,7 +223,7 @@ Núcleo (`src/faturas_app/core/`, sem GUI):
 - `excel_io.py` — escrita estilizada + metadados / leitura.
 - `concat.py` — concatenação com remapeamento canônico + dedup.
 - `derivados.py` — colunas recalculadas do zero: unidade_consumidora.(primeira|ultima)_*,
-  id_uc_atual_medidor(+sem_format), id_uc_canonico + as 28 colunas do dicionário,
+  id_uc_atual_medidor(+sem_format), id_uc_canonico + as colunas do mapa de UCs,
   medidor (fatura/fatura_resumida), item_normalizado e a aba `tarifas` inteira
   (`aplicar` no processamento, `aplicar_concat` na concatenação). **A ORDEM das
   chamadas em `_calcular` importa**: `_colunas_medidor` → `_enriquecer_dicionario_uc`
@@ -333,6 +324,12 @@ Reverter: extraia o `.zip` por cima de `app_faturas`.
   99,86%+ EQ reconciliadas.
 - **FATURAS_SELFCHECK** é o arquivo de SAÍDA do relatório (o app ESCREVE nele) —
   nunca apontar para um arquivo que não possa ser sobrescrito.
+- **Colunas do mapa de UC são DINÂMICAS.** `schema.CANONICAL_COLUMNS` lista as
+  7 colunas do template só para fixar a ORDEM; quem cria (ou não) é
+  `derivados._enriquecer_mapa_uc`, conforme o que o usuário mapeou na
+  importação. Sem mapa, nenhuma delas — e nenhuma aba tem `id_uc_canonico`.
+- **`unidade_judiciaria` virou `unidade_institucional`** (nome genérico, o app
+  não é só do Judiciário).
 - **Nada de dados de instituição embutidos no app.** Não existem mais
   `resources/hardcodes_padrao.json` nem `resources/dicionario_uc.json`: eram do
   TJGO e iam para todo mundo que instalasse. `hardcodes.padrao()` devolve `[]`

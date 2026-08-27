@@ -19,6 +19,7 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 from ..core import hardcodes
+from .editor_json import EditorJson
 
 _OP_ROTULOS = list(hardcodes.OPERADORES.values())
 _OP_POR_ROTULO = {v: k for k, v in hardcodes.OPERADORES.items()}
@@ -320,10 +321,12 @@ class AbaHardcodes(ctk.CTkFrame):
                       command=self._importar_planilha).grid(row=1, column=1, padx=(8, 0))
         ctk.CTkButton(rod, text="⇧  Exportar para planilha…", width=190,
                       command=self._exportar_planilha).grid(row=1, column=2, padx=(8, 8))
-        ctk.CTkButton(rod, text="➕  Novo hardcode", command=self._novo).grid(
-            row=1, column=3, padx=(0, 8))
+        ctk.CTkButton(rod, text="✎  Editar JSON", width=130,
+                      command=self._editar_json).grid(row=1, column=3, padx=(0, 8))
+        ctk.CTkButton(rod, text="➕  Novo", width=90, command=self._novo).grid(
+            row=1, column=4, padx=(0, 8))
         ctk.CTkButton(rod, text="💾  Salvar hardcodes", height=36,
-                      command=self._salvar).grid(row=1, column=4)
+                      command=self._salvar).grid(row=1, column=5)
 
         # ── cabeçalho ────────────────────────────────────────────────────
         top = ctk.CTkFrame(self, fg_color="transparent")
@@ -363,18 +366,21 @@ class AbaHardcodes(ctk.CTkFrame):
     def _exportar_planilha(self):
         """Grava as regras da tela numa planilha — backup e MODELO de importação."""
         caminho = filedialog.asksaveasfilename(
-            title="Exportar hardcodes para planilha",
-            defaultextension=".xlsx", initialfile="hardcodes.xlsx",
-            filetypes=[("Planilha Excel", "*.xlsx")])
+            title="Exportar hardcodes", defaultextension=".json",
+            initialfile="hardcodes.json",
+            filetypes=[("Arquivo JSON", "*.json"), ("Planilha Excel", "*.xlsx")])
         if not caminho:
             return
         try:
-            n = hardcodes.exportar_planilha(caminho, self._regras(), self._dominio)
+            if os.path.splitext(caminho)[1].lower() == ".json":
+                n = hardcodes.exportar_json(caminho, self._regras(), self._dominio)
+            else:
+                n = hardcodes.exportar_planilha(caminho, self._regras(), self._dominio)
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Erro", f"Não foi possível exportar:\n{e}")
             return
         self.lbl_status.configure(
-            text=f"✅ {n} hardcode(s) exportado(s) para: {caminho}")
+            text="✅ " + str(n) + " hardcode(s) exportado(s) para: " + str(caminho))
 
     def _importar_planilha(self):
         """
@@ -383,12 +389,13 @@ class AbaHardcodes(ctk.CTkFrame):
         regras já existentes — importar não pode apagar trabalho por engano.
         """
         caminho = filedialog.askopenfilename(
-            title="Selecione a planilha de hardcodes",
-            filetypes=[("Planilha ou CSV", "*.xlsx *.xlsm *.csv")])
+            title="Selecione o arquivo de hardcodes (JSON ou planilha)",
+            filetypes=[("JSON ou planilha", "*.json *.xlsx *.xlsm *.csv")])
         if not caminho:
             return
         try:
-            regras, relatorio = hardcodes.importar_planilha(caminho, self._dominio)
+            # aceita os dois: a planilha é convertida para o mesmo JSON
+            regras, relatorio = hardcodes.importar_arquivo(caminho, self._dominio)
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Erro", f"Não foi possível importar o arquivo:\n{e}")
             return
@@ -434,6 +441,19 @@ class AbaHardcodes(ctk.CTkFrame):
             text=f"✅ {novos} hardcode(s) importado(s) "
                  f"({'substituindo' if substituir else 'somando'}). "
                  f"Confira e clique em 'Salvar hardcodes'.")
+
+    def _editar_json(self):
+        """Abre o JSON salvo para edição manual; ao salvar, a tela recarrega."""
+        EditorJson(self, f"Hardcodes ({self._dominio})",
+                   hardcodes._arquivo(self._dominio), self._apos_editar_json).focus()
+
+    def _apos_editar_json(self):
+        for c in list(self.cartoes):
+            c.destroy()
+        self.cartoes.clear()
+        for regra in hardcodes.carregar(self._dominio):
+            self._add_cartao(regra)
+        self.lbl_status.configure(text="✅ Hardcodes salvos e recarregados.")
 
     def _novo(self):
         c = self._add_cartao(hardcodes.regra_vazia(dominio=self._dominio))

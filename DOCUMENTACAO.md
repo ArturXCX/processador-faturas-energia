@@ -22,7 +22,7 @@ Python instalado**) que lê PDFs de faturas de energia de **duas distribuidoras*
    renomeada/editada) e concatena novas faturas, remapeando colunas.
 
 Recursos transversais: **OCR embutido** (faturas CHESP escaneadas), coluna de
-**link do PDF**, **mapa de UC** (troca id_uc antigo→novo), **glossário**
+**link do PDF**, **mapa de UCs** (cadastro importado pelo usuário), **glossário**
 automático, **nome do arquivo** configurável, e carimbo de **última atualização**.
 
 ---
@@ -36,7 +36,7 @@ Ordem de saída: `fatura_resumida` → `fatura` → `unidade_consumidora` →
 | Aba | Conteúdo | Origem |
 |---|---|---|
 | `fatura` | 1 linha/fatura: id, datas, valor, medidor, dados fiscais, classificação, SCEE, leituras | processador |
-| `unidade_consumidora` | dados da UC (razão social, CNPJ, endereço, primeira/última competência e fatura) + o cadastro do dicionário oficial de UCs; **1 linha por UC** (drop_duplicates ao final) | processador + `core/dicionario_uc.py` |
+| `unidade_consumidora` | dados da UC (razão social, CNPJ, endereço, primeira/última competência e fatura) + o cadastro do MAPA DE UCs, quando houver; **1 linha por UC** (drop_duplicates ao final) | processador + `core/dicionario_uc.py` |
 | `itens_fatura` | itens (energia, demanda, tributos, ajustes); tem `id_uc` | processador |
 | `tarifas` | tabela de referência: 1 linha por (`fornecedor`, `item`, `tarifa_unitaria_r$`), na competência em que a combinação apareceu pela 1ª vez | **derivada** de `itens_fatura` |
 | `impostos` | PIS/PASEP, COFINS, ICMS | processador |
@@ -67,33 +67,28 @@ Colunas-chave especiais:
   e não-`NULO_`) e **`id_uc_atual_medidor_sem_format`**, e por fim
   **`id_uc_canonico`**. **`competencia`** aparece em todas as abas exceto
   `unidade_consumidora`.
-- **`id_uc_canonico`** (todas as abas com `id_uc`): a UC identificada segundo a
-  **metodologia escolhida** pelo usuário na aba Parâmetros
-  (`dicionario_uc.modo()`, persistida em `%APPDATA%/FaturasEnergia/config_uc.json`):
-  - `MODO_DICIONARIO`: a UC do **dicionário oficial** importado, sem pontuação.
-    O `id_uc` impresso não é estável no tempo — o formato mudou
-    (`10008414082` → `2.742.876.012-19`, mesma UC) — e a reconciliação por
-    medidor quebra quando a UC troca de medidor. O dicionário é cadastral,
-    então une o histórico completo da UC real; UC fora do dicionário cai para o
-    valor inferido pelo medidor.
-  - `MODO_MEDIDOR` (**padrão**): a UC inferida pelo **medidor** (comportamento
-    clássico, para instituições sem cadastro oficial). As 28 colunas do
-    dicionário **não são criadas** e o dicionário nem é lido. É o padrão porque
-    o app não embarca cadastro de instituição nenhuma — o cadastro é sempre
-    importado (com casamento tolerante de nomes de campo, ver
-    `dicionario_uc.analisar`).
+- **`id_uc_canonico`** (todas as abas com `id_uc`): a UC segundo o MAPA DE UCs.
+  Ela **só existe quando há um mapa importado**: é a UC canônica do
+  cadastro, que une o histórico da mesma UC real mesmo quando o `id_uc` mudou de
+  formato (`10008414082` → `2.742.876.012-19`) ou o medidor foi trocado — casos
+  em que `id_uc_atual_medidor` falha. UC fora do mapa cai para o valor inferido
+  pelo medidor, quando essa identificação está ligada.
 
-  **É a coluna recomendada para agrupar por UC** (ex.: no Power BI) nas duas.
+  Sem mapa, NENHUMA aba tem `id_uc_canonico`.
+
+  **É a coluna recomendada para agrupar por UC** (ex.: no Power BI).
   `schema.DEDUP_KEYS["unidade_consumidora"]` continua sendo `id_uc` — migrar
   mudaria a contagem de linhas de planilhas já publicadas (decisão adiada, com
   `TODO` no `schema.py`).
-- **Cadastro do dicionário** (28 colunas em `unidade_consumidora`, entre `uf` e
-  `primeira_competencia`): `unidade_judiciaria`, `comarca`, `concessionaria`,
-  `endereco_dicionario`, `medidor_atual_dicionario`, colunas de rateio, etc.
-  Vêm do cadastro IMPORTADO pelo usuário (`%APPDATA%/FaturasEnergia/dicionario_uc.json`)
-  — o app não embarca nenhum. `razao_social`/`cnpj`/`cep`/
-  `municipio`/`uf` continuam vindo do PDF. **Demanda contratada nunca vem do
-  dicionário** — ver abaixo.
+- **Cadastro do mapa de UCs** (em `unidade_consumidora`, entre `uf` e
+  `primeira_competencia`): as colunas do template que a importação mapeou
+  (id_uc_aneel_bordero, uc_operante, medidor_atual_dicionario, unidade_institucional, endereco_dicionario, participa_rateio, demanda_futura_kw) mais as colunas extras
+  criadas na importação. Vêm do arquivo que o usuário importou; item não
+  mapeado não vira coluna. `razao_social`/`cnpj`/`cep`/`municipio`/`uf`
+  continuam vindo do PDF. **Demanda contratada nunca vem do mapa.**
+- **Identificação por medidor** (`id_uc_atual_medidor`,
+  `id_uc_atual_medidor_sem_format`, `id_uc_atual`): opcional quando há mapa
+  (aba Parâmetros). Desligada, as três somem de todas as abas.
 - **`demanda_contratada_kw` / `demanda_geracao_contratada_kw`** vêm SEMPRE do
   PDF da fatura. Ficam **vazias** quando a fatura não traz o campo de grandezas
   contratadas; `0` só quando a fatura imprime esse valor explicitamente (antes,
@@ -137,7 +132,7 @@ src/faturas_app/
 │   ├── concat.py        concatenação com remapeamento canônico + dedup
 │   ├── links.py         gera coluna link_pdf (busca no Drive pelo nome / modelo)
 │   ├── derivados.py     colunas recalculadas do zero: unidade_consumidora.(primeira|ultima)_*, id_uc_atual_medidor(+sem_format), id_uc_canonico, medidor, item_normalizado, e a aba `tarifas` inteira
-│   ├── dicionario_uc.py cadastro OFICIAL de UCs (semente em resources/, override em %APPDATA%); resolve o id_uc em qualquer formato e alimenta id_uc_canonico + 28 colunas de unidade_consumidora. Guarda também a METODOLOGIA escolhida (modo()/definir_modo(): dicionário ou medidor)
+│   ├── dicionario_uc.py MAPA DE UCs importado pelo usuário (%APPDATA%/mapa_uc.json; o app não embarca nenhum): TEMPLATE, importação com mapeamento (analisar_arquivo/aplicar_mapeamento), id_uc_canonico e as colunas de cadastro. Guarda também se a identificação por medidor está ligada
 │   ├── equivalencias.py tabela item→item_normalizado persistida em %APPDATA%/FaturasEnergia
 │   ├── hardcodes.py     regras SE→ENTÃO do usuário (erro da concessionária), persistidas em %APPDATA%/FaturasEnergia
 │   ├── glossario.py     monta a aba glossario (docs + conceitos + itens do PDF)
