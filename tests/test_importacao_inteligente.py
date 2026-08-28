@@ -1,15 +1,15 @@
 """
-Importação por planilha (hardcodes) e por JSON (cadastro de UCs).
+Importação de hardcodes por planilha.
 
-As duas existem pelo mesmo motivo: o app deixou de embarcar dados de UMA
-instituição (as regras e o cadastro do TJGO) e passou a receber os de cada uma
-por importação. Para isso a leitura precisa ser TOLERANTE — quem monta a
-planilha/JSON não vai usar exatamente os rótulos do TJGO — e precisa dizer o
-que entendeu, em vez de falhar em silêncio ou aceitar lixo.
+Existe porque o app deixou de embarcar as regras de UMA instituição e passou a
+receber as de cada uma por importação. A leitura é TOLERANTE — quem monta a
+planilha não vai acertar os rótulos exatos — e diz o que entendeu, em vez de
+falhar em silêncio ou aceitar lixo.
+
+(O mapa de UCs tem testes próprios em test_mapa_uc.py.)
 
 Rodar:  PYTHONPATH=src python -m pytest tests/ -q
 """
-import json
 import os
 import sys
 
@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from faturas_app.core import dicionario_uc, hardcodes  # noqa: E402
+from faturas_app.core import hardcodes  # noqa: E402
 
 
 # ── hardcodes: planilha ──────────────────────────────────────────────────────
@@ -143,87 +143,6 @@ def test_dominio_borderos(tmp_path):
                   [{"id": "x", "coluna": "valor", "valor": "1"}])
     regras, _ = hardcodes.importar_planilha(p, "borderos")
     assert regras[0]["aba"] == "unidades"
-
-
-# ── dicionário de UCs: JSON ──────────────────────────────────────────────────
-def _json(tmp_path, data, nome="d.json"):
-    p = tmp_path / nome
-    p.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    return str(p)
-
-
-def test_json_no_formato_canonico(tmp_path):
-    p = _json(tmp_path, [{"UC": 274287601219, "UNIDADE JUDICIÁRIA": "Juizado"}])
-    regs, _ = dicionario_uc.analisar(p)
-    assert regs[0]["UC"] == 274287601219
-
-
-def test_json_de_outra_instituicao(tmp_path):
-    """O ponto da mudança: cadastro com OUTROS nomes de campo é entendido."""
-    p = _json(tmp_path, [{"id_uc": "12345678", "orgao": "Secretaria X",
-                          "endereco": "Rua A, 1", "municipio": "Goiânia",
-                          "distribuidora": "EQUATORIAL", "medidor": "999-1"}])
-    regs, _ = dicionario_uc.analisar(p)
-    r = regs[0]
-    assert r["UC"] == "12345678"
-    assert r["UNIDADE JUDICIÁRIA"] == "Secretaria X"
-    assert r["ENDEREÇO"] == "Rua A, 1"
-    assert r["COMARCA"] == "Goiânia"
-    assert r["CONCESSIONÁRIA"] == "EQUATORIAL"
-    assert r["MEDIDOR_ATUAL"] == "999-1"
-
-
-def test_json_embrulhado_em_objeto(tmp_path):
-    p = _json(tmp_path, {"ucs": [{"unidade_consumidora": "555", "nome": "Fórum"}]})
-    regs, _ = dicionario_uc.analisar(p)
-    assert regs[0]["UC"] == "555"
-
-
-def test_json_indexado_pela_uc(tmp_path):
-    """{"888": {...}} — a chave do objeto é a própria UC."""
-    p = _json(tmp_path, {"888888": {"orgao": "Anexo"}, "999999": {"orgao": "Sede"}})
-    regs, _ = dicionario_uc.analisar(p)
-    assert sorted(r["UC"] for r in regs) == ["888888", "999999"]
-
-
-def test_json_sem_uc_e_recusado(tmp_path):
-    p = _json(tmp_path, [{"nome_qualquer": "x", "outro": 1}])
-    with pytest.raises(ValueError):
-        dicionario_uc.analisar(p)
-
-
-def test_json_vazio_e_nao_lista_sao_recusados(tmp_path):
-    with pytest.raises(ValueError):
-        dicionario_uc.analisar(_json(tmp_path, [], "v.json"))
-    with pytest.raises(ValueError):
-        dicionario_uc.analisar(_json(tmp_path, {"config": "algo"}, "n.json"))
-
-
-def test_demanda_contratada_continua_blindada(tmp_path, monkeypatch):
-    """
-    BLINDAGEM: mesmo importando um cadastro que TRAZ demanda contratada, ela
-    não vira coluna — demanda vem sempre da fatura. E o app avisa que ignorou.
-    """
-    p = _json(tmp_path, [{"UC": 1, "DEMANDA CONTRATADA (kW)": 150, "orgao": "X"}])
-    regs, rel = dicionario_uc.analisar(p)
-    assert any("DEMANDA CONTRATADA" in l for l in rel)
-
-    cache = dicionario_uc._construir(regs)
-    cache["fonte"], cache["arquivo"] = "usuario", None
-    monkeypatch.setattr(dicionario_uc, "_CACHE", cache)
-    campos = dicionario_uc.campos_unidade_consumidora(1)
-    assert "demanda_contratada_kw" not in campos
-    assert 150 not in campos.values()
-
-
-def test_sem_arquivo_importado_o_cadastro_fica_vazio(monkeypatch, tmp_path):
-    """O app não embarca mais nenhum dicionário."""
-    monkeypatch.setattr(dicionario_uc, "_dir_usuario", lambda: tmp_path)
-    monkeypatch.setattr(dicionario_uc, "_CACHE", None)
-    m = dicionario_uc.metadados()
-    assert m["total_ucs"] == 0
-    assert m["fonte"] == "nenhum"
-    assert dicionario_uc.buscar("274287601219") is None
 
 
 if __name__ == "__main__":

@@ -682,3 +682,74 @@ def importar_planilha(caminho: str, dominio: str = "faturas"):
     if len(avisos) > 20:
         relatorio.append("⚠ … e mais %d aviso(s)." % (len(avisos) - 20))
     return final, relatorio
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# JSON: o formato de troca dos hardcodes
+# ──────────────────────────────────────────────────────────────────────────────
+# As regras já são persistidas em JSON (`hardcodes.json`); é também por JSON que
+# elas entram e saem do app. A planilha continua aceita como ENTRADA — é
+# convertida para o mesmo JSON na importação —, porque montar dezenas de regras
+# no Excel é mais cômodo do que escrever JSON à mão.
+def exportar_json(caminho: str, regras=None, dominio: str = "faturas") -> int:
+    """Grava as regras em JSON. Devolve quantas saíram."""
+    regras = carregar(dominio) if regras is None else [_normalizar(r) for r in regras]
+    with open(caminho, "w", encoding="utf-8") as f:
+        json.dump(regras, f, ensure_ascii=False, indent=1)
+    return len(regras)
+
+
+def importar_json(caminho: str, dominio: str = "faturas"):
+    """
+    Lê um JSON de hardcodes e devolve `(regras, relatorio)` sem gravar nada.
+
+    A conformidade exigida é a estrutura da regra: `grupos` (com `condicoes`) e
+    `acoes`. O que estiver fora do esperado vira aviso, não exceção — o objetivo
+    é o usuário ver o que o app entendeu antes de aplicar.
+    """
+    with open(caminho, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if isinstance(data, dict):
+        candidatas = [v for v in data.values()
+                      if isinstance(v, list) and v and isinstance(v[0], dict)]
+        data = max(candidatas, key=len) if candidatas else [data]
+    if not isinstance(data, list):
+        raise ValueError("Esperado uma LISTA de hardcodes no arquivo JSON.")
+
+    abas_validas = {_chave_col(a) for a in abas_disponiveis(dominio)}
+    regras, avisos = [], []
+    for i, bruto in enumerate(data, start=1):
+        if not isinstance(bruto, dict):
+            avisos.append(f"item {i} ignorado: não é um objeto.")
+            continue
+        if not bruto.get("grupos") and not bruto.get("acoes"):
+            avisos.append(f"item {i} ignorado: sem 'grupos' nem 'acoes' — não "
+                          f"parece um hardcode.")
+            continue
+        regra = _normalizar(bruto)
+        aba = regra.get("aba", "")
+        if aba and _chave_col(aba) not in abas_validas:
+            avisos.append(f"'{regra['nome'] or regra['id']}': a aba {aba!r} não "
+                          f"existe no domínio {dominio!r} — importada assim mesmo.")
+        regras.append(regra)
+
+    n_cond = sum(len(g.get("condicoes", [])) for r in regras for g in r.get("grupos", []))
+    n_acao = sum(len(r.get("acoes", [])) for r in regras)
+    relatorio = [f"{len(regras)} regra(s) lida(s) de {os.path.basename(caminho)}.",
+                 f"{n_cond} condição(ões) e {n_acao} ação(ões)."]
+    sem_acao = [r["nome"] or r["id"] for r in regras if not r["acoes"]]
+    if sem_acao:
+        relatorio.append(f"⚠ {len(sem_acao)} regra(s) sem ação: "
+                         + ", ".join(sem_acao[:5]) + (" …" if len(sem_acao) > 5 else ""))
+    relatorio += ["⚠ " + a for a in avisos[:15]]
+    return regras, relatorio
+
+
+def importar_arquivo(caminho: str, dominio: str = "faturas"):
+    """
+    Importa de JSON **ou** de planilha, pela extensão. A planilha é convertida
+    para o mesmo JSON — é só um jeito mais cômodo de montar as regras.
+    """
+    if os.path.splitext(caminho)[1].lower() == ".json":
+        return importar_json(caminho, dominio)
+    return importar_planilha(caminho, dominio)

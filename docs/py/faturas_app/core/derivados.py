@@ -7,8 +7,9 @@ faturas (tanto no processamento quanto na concatenação):
     (e o id_fatura correspondente) por id_uc_canonico.
   - id_uc_sem_format / id_uc_atual_medidor / id_uc_atual_medidor_sem_format:
     ao lado de id_uc, em TODAS as abas.
-  - id_uc_canonico e o cadastro do dicionário oficial de UCs: ver
-    `_enriquecer_dicionario_uc` e core/dicionario_uc.py.
+  - id_uc_canonico e o cadastro do MAPA DE UCs importado: ver
+    `_enriquecer_mapa_uc` e core/dicionario_uc.py. Sem mapa carregado nenhuma
+    das duas coisas existe.
   - medidor: em 'fatura' e 'fatura_resumida', o medidor (moda) da fatura.
   - item_normalizado: em itens_fatura.
   - a aba 'tarifas' inteira: ver `_derivar_tarifas`.
@@ -34,7 +35,9 @@ COLUNAS_DERIVADAS = ["primeira_competencia", "ultima_competencia",
                      "id_uc_atual_medidor_sem_format", "id_uc_atual", "medidor",
                      "item_normalizado", "tipo_fornecimento",
                      "id_uc_canonico",
-                     *dicionario_uc.COLUNAS_UNIDADE_CONSUMIDORA]
+                     # as colunas do mapa de UCs são dinâmicas (dependem do que
+                     # o usuário importou), por isso entram em tempo de execução
+                     *dicionario_uc.COLUNAS_TEMPLATE]
 
 
 def aplicar(dfs: dict) -> dict:
@@ -48,12 +51,13 @@ def _calcular(dfs: dict) -> None:
     # A ORDEM importa (não é só anexar linhas novas no fim):
     _colunas_medidor(dfs)            # (1) antes do dicionário: é o fallback de
                                      #     id_uc_canonico (id_uc_atual_medidor)
-    _enriquecer_dicionario_uc(dfs)   # (2) id_uc_canonico + cadastro do dicionário
+    _enriquecer_mapa_uc(dfs)         # (2) id_uc_canonico + cadastro do mapa de UCs
     _extremos_por_uc(dfs)            # (3) depois de (2): agrupa por id_uc_canonico
     _item_normalizado(dfs)           # (4)
     _derivar_tarifas(dfs)            # (5) depois de (4): tarifas leva item_normalizado
     _tipo_fornecimento_upper(dfs)    # (6)
-    _reordenar_canonico(dfs)         # (7) por último, sempre
+    _remover_colunas_medidor(dfs)    # (7) depois de tudo que as usa
+    _reordenar_canonico(dfs)         # (8) por último, sempre
 
 
 def _extremos_por_uc(dfs: dict) -> None:
@@ -165,58 +169,73 @@ def _colunas_medidor(dfs: dict) -> None:
             df["medidor"] = df["id_fatura"].map(mapa_fat_med)
 
 
-def _enriquecer_dicionario_uc(dfs: dict) -> None:
+def _enriquecer_mapa_uc(dfs: dict) -> None:
     """
-    Consulta o dicionário oficial de UCs (core/dicionario_uc.py) por id_uc — a
-    busca já normaliza para dígitos, então casa o id_uc em qualquer formato
-    (antigo, atual, com ou sem pontuação) — e grava:
+    Aplica o MAPA DE UCs importado (core/dicionario_uc.py) sobre as abas.
 
-      - Em TODAS as abas com 'id_uc': 'id_uc_canonico' = a UC atual segundo o
-        dicionário; quando o dicionário não conhece a UC, cai para o fallback
-        já calculado por `_colunas_medidor` ('id_uc_atual_medidor_sem_format'
-        em 'unidade_consumidora', 'id_uc_atual' nas demais abas).
-      - APENAS em 'unidade_consumidora': também as colunas cadastrais
-        (dicionario_uc.COLUNAS_UNIDADE_CONSUMIDORA). Nas outras abas ficaria
-        um cadastro redundante repetido por linha.
+      - Em TODAS as abas com 'id_uc': grava 'id_uc_canonico' — a UC canônica do
+        mapa. Quando o mapa não conhece a UC, cai para o valor inferido pelo
+        medidor (se a identificação por medidor estiver ligada).
+      - APENAS em 'unidade_consumidora': as colunas de cadastro que o mapa
+        realmente tem. Item do template que não foi mapeado na importação não
+        vira coluna; nas outras abas o cadastro ficaria repetido por linha.
 
-    Precisa rodar DEPOIS de `_colunas_medidor` (usa suas colunas como fallback).
+    SEM MAPA CARREGADO nada disso acontece: nenhuma coluna de cadastro e, em
+    aba nenhuma, 'id_uc_canonico'.
 
-    Respeita a metodologia escolhida pelo usuário (`dicionario_uc.modo()`): em
-    MODO_MEDIDOR o dicionário não é consultado, `id_uc_canonico` recebe o valor
-    da heurística de medidor e as colunas cadastrais NÃO são criadas — é o
-    comportamento clássico, para instituições que não têm um cadastro oficial.
+    Precisa rodar DEPOIS de `_colunas_medidor` (usa suas colunas de fallback).
     """
-    usar_dicionario = dicionario_uc.ativo()
+    if not dicionario_uc.ativo():
+        return
+
+    colunas = dicionario_uc.colunas_ativas()
+    usar_medidor = dicionario_uc.usar_medidor()
     for aba, df in dfs.items():
         if df is None or df.empty or "id_uc" not in df.columns:
             continue
-        if not usar_dicionario:
-            fallback = (df.get("id_uc_atual_medidor_sem_format")
-                        if aba == "unidade_consumidora" else df.get("id_uc_atual"))
-            if fallback is not None:
-                df["id_uc_canonico"] = fallback
-            continue
-        # Consulta o dicionário uma vez por id_uc DISTINTO, não por linha: são
-        # ~400 UCs para dezenas de milhares de linhas em itens_fatura/medicao,
-        # e cada consulta monta um dict de 28 campos. Sem isso, o
-        # pós-processamento de um lote grande (10 mil faturas) levava minutos.
-        unicos = {v: dicionario_uc.campos_unidade_consumidora(v)
-                  for v in df["id_uc"].unique()}
-        canonico_dicionario = df["id_uc"].map(
-            {k: (c.get("id_uc_dicionario_sem_format") if c else None)
-             for k, c in unicos.items()})
+        # Consulta o mapa uma vez por id_uc DISTINTO, não por linha: são
+        # centenas de UCs para dezenas de milhares de linhas em
+        # itens_fatura/medicao. Sem isso, o pós-processamento de um lote grande
+        # (10 mil faturas) levava minutos.
+        distintos = list(df["id_uc"].unique())
+        canonico = {v: dicionario_uc.id_canonico(v) for v in distintos}
+        serie = df["id_uc"].map(canonico)
+
         if aba == "unidade_consumidora":
-            fallback = df.get("id_uc_atual_medidor_sem_format")
-            for col in dicionario_uc.COLUNAS_UNIDADE_CONSUMIDORA:
+            campos = {v: dicionario_uc.campos_unidade_consumidora(v) for v in distintos}
+            for col in colunas:
                 df[col] = df["id_uc"].map(
-                    {k: (c.get(col) if c else None) for k, c in unicos.items()})
+                    {k: (c.get(col) if c else None) for k, c in campos.items()})
+            fallback = df.get("id_uc_atual_medidor_sem_format") if usar_medidor else None
         else:
-            fallback = df.get("id_uc_atual")
+            fallback = df.get("id_uc_atual") if usar_medidor else None
+
         if fallback is None:
-            df["id_uc_canonico"] = canonico_dicionario
+            df["id_uc_canonico"] = serie
         else:
-            df["id_uc_canonico"] = canonico_dicionario.where(
-                canonico_dicionario.notna(), fallback)
+            df["id_uc_canonico"] = serie.where(serie.notna(), fallback)
+
+
+def _remover_colunas_medidor(dfs: dict) -> None:
+    """
+    Tira as colunas de identificação por MEDIDOR quando o usuário desligou essa
+    identificação (só possível com mapa carregado — sem mapa, o medidor é a
+    única identificação que existe).
+
+    São três, e todas carregam o mesmo dado: 'id_uc_atual_medidor' e
+    'id_uc_atual_medidor_sem_format' em `unidade_consumidora`, e 'id_uc_atual'
+    nas demais abas — manter esta última deixaria o dado do medidor na planilha
+    sob outro nome.
+    """
+    if dicionario_uc.usar_medidor():
+        return
+    alvo = ("id_uc_atual_medidor", "id_uc_atual_medidor_sem_format", "id_uc_atual")
+    for aba, df in dfs.items():
+        if df is None or getattr(df, "empty", True):
+            continue
+        sobrando = [c for c in alvo if c in df.columns]
+        if sobrando:
+            dfs[aba] = df.drop(columns=sobrando)
 
 
 def _item_normalizado(dfs: dict) -> None:

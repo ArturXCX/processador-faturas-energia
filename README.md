@@ -128,10 +128,10 @@ Dois formatos de distribuição são gerados em `dist\`:
     combinação apareceu pela primeira vez. Bandeira tarifária e itens sem tarifa
     ficam de fora. Calculada em `derivados.py` (precisa de `item_normalizado` e
     de `fornecedor`, que só existem depois de `Dataset.to_dataframes()`).
-- `unidade_consumidora` traz, além do que vem do PDF, **28 colunas do dicionário
-  oficial de UCs** (unidade judiciária, comarca, endereço, medidor atual,
-  rateios…) e a coluna **`id_uc_canonico`**, que une o histórico da mesma UC real
-  mesmo quando o número muda de formato. Ver "Dicionário de UCs" abaixo.
+- `unidade_consumidora` traz, além do que vem do PDF, as colunas do **mapa de
+  UCs** que o usuário importou e a coluna **`id_uc_canonico`**, que une o
+  histórico da mesma UC real mesmo quando o número muda de formato. **Sem mapa,
+  nenhuma das duas coisas existe.** Ver "Mapa de Unidades Consumidoras" abaixo.
 - `demanda_contratada_kw` / `demanda_geracao_contratada_kw` ficam **vazias**
   quando a fatura não traz o campo de grandezas contratadas (antes gravavam `0`);
   `0` só quando a fatura imprime esse valor.
@@ -144,43 +144,61 @@ Dois formatos de distribuição são gerados em `dist\`:
 Ambas as abas têm um campo "Nome do arquivo" (placeholder `faturas_energia`) que
 define o nome sugerido ao salvar.
 
-### Identificação das Unidades Consumidoras (`core/dicionario_uc.py`)
+### Mapa de Unidades Consumidoras (`core/dicionario_uc.py`)
 
-Há **duas metodologias**, escolhidas na aba **Parâmetros** (a escolha fica
-salva). Existem porque um dicionário oficial é o cadastro de **uma**
-instituição — sem essa opção, o app só serviria para ela:
+O número da UC impresso na fatura **não é estável no tempo** (o formato muda, o
+medidor é trocado). Um cadastro à parte resolve isso — mas ele é de **uma**
+instituição, então o app **não embarca nenhum**: o mapa é sempre importado.
 
-| Metodologia | Como identifica a UC | Cadastro |
+**Template.** Aba Parâmetros → *Gerar modelo* produz o JSON (ou a planilha) com
+os itens que o app entende:
+
+| item | vira a coluna | tipo |
 |---|---|---|
-| **Com dicionário (JSON)** | `id_uc_canonico` = UC do cadastro oficial | 28 colunas vindas do JSON |
-| **Sem dicionário (pelo medidor)** | `id_uc_canonico` = UC inferida pelo **medidor** | só o que vem do PDF |
+| `id_uc` (**obrigatório**) | — (é a chave) | texto |
+| `id_uc_aneel_bordero` | `id_uc_aneel_bordero` | texto |
+| `uc_operante` | `uc_operante` | booleano |
+| `medidor_atual_dicionario` | `medidor_atual_dicionario` | texto |
+| `unidade_institucional` | `unidade_institucional` | texto |
+| `endereco_dicionario` | `endereco_dicionario` | texto |
+| `participa_rateio` | `participa_rateio` | booleano |
+| `demanda_futura_kw` | `demanda_futura_kw` | número |
 
-Na metodologia **sem dicionário** (padrão, e comportamento clássico do app) as
-28 colunas de cadastro **não são criadas** — a planilha não vem cheia de coluna
-vazia de um cadastro que não é da sua instituição.
+`id_uc` aceita **vários identificadores da mesma UC** (lista ou separados por
+`;`) — é isso que faz `id_uc_canonico` unir o histórico quando o número mudou de
+formato. O primeiro é o canônico.
 
-O número da UC impresso na fatura **não é estável no tempo**: o formato mudou
-historicamente (`10008414082` → `2.742.876.012-19`, mesma UC) e a reconciliação
-por medidor quebra quando a UC troca de medidor. É esse problema que a
-metodologia **com dicionário** resolve — o app extrai do PDF apenas o `id_uc`
-bruto (mais `razao_social`/`cnpj`/`cep`/`municipio`/`uf`).
+**Importação** (JSON *ou* planilha, desde que os nomes das colunas sejam os dos
+itens):
 
-- **Nada vem embutido**: o app não acompanha cadastro de nenhuma instituição.
-  Instalação nova nasce na metodologia **sem dicionário**.
-- **Importação tolerante**: aba **Parâmetros → "Importar novo dicionário
-  (.json)"**. O JSON não precisa usar os rótulos de nenhuma instituição
-  específica — `id_uc`/`unidade_consumidora`/`instalacao`, `orgao`/`unidade`,
-  `endereco`, `municipio`, `distribuidora`… são reconhecidos por sinônimo.
-  Aceita lista de objetos, objeto embrulhando a lista (`{"ucs": [...]}`) ou
-  objeto indexado pela UC. O app mostra o que entendeu ANTES de aplicar.
-- Importar um cadastro liga a metodologia por dicionário automaticamente, grava
-  em `%APPDATA%\FaturasEnergia\dicionario_uc.json` e alimenta `id_uc_canonico`
-  e as 28 colunas de cadastro de `unidade_consumidora`.
+1. `id_uc` precisa vir com esse nome exato — é a chave e não pode ser adivinhada.
+2. Itens com nome idêntico ao do template são casados **automaticamente**.
+3. O que sobrou você mapeia na tela: item do template ← campo do arquivo.
+4. Item do template que ficar sem correspondência **não vira coluna**.
+5. Campo do arquivo fora do template vira **coluna nova**, com o nome do campo
+   ou um que você escolher.
 
-> A **demanda contratada** nunca vem do dicionário — sempre da fatura do mês.
-> O mapeamento campo→coluna é uma tabela explícita, então um dicionário futuro
-> que volte a trazer `DEMANDA CONTRATADA (kW)` tem esse campo ignorado (com
-> aviso), sem risco de duas fontes divergirem para o mesmo conceito.
+**Sem mapa importado**, nenhuma coluna do template entra em
+`unidade_consumidora` e **nenhuma aba recebe `id_uc_canonico`**.
+
+**Identificação histórica por medidor.** Com mapa carregado ela é opcional
+(o cadastro já identifica a UC). Desligada, `id_uc_atual_medidor`,
+`id_uc_atual_medidor_sem_format` e `id_uc_atual` não são criadas em aba nenhuma.
+Sem mapa, é a única identificação que existe e fica sempre ligada.
+
+> **Demanda contratada nunca vem do mapa** — é sempre a da fatura do mês. O
+> template não tem esses itens e eles são recusados até como coluna extra.
+
+### Parâmetros em JSON, editáveis no app
+
+Os três parâmetros — **mapa de UCs**, **hardcodes** e **normalização de itens** —
+são persistidos em JSON em `%APPDATA%\FaturasEnergia\` e podem ser:
+
+- **importados** de JSON *ou* de planilha (a planilha é convertida para o mesmo
+  JSON; em ambos os casos os nomes precisam bater);
+- **exportados** para JSON;
+- **editados à mão** dentro do app (botão *Editar JSON*), com validação antes de
+  gravar e cópia do anterior em `.bak`. Ao salvar, o JSON passa a valer na hora.
 
 ### Versão web (GitHub Pages)
 
