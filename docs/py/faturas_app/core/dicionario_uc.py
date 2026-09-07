@@ -119,6 +119,42 @@ def _texto(v) -> str:
     return "" if s.lower() in ("nan", "none", "nat") else s
 
 
+def _id_texto(v) -> str:
+    """Identificador como texto: '-' e vazios viram ''; 274287601219.0 → '274287601219'."""
+    if isinstance(v, float) and v.is_integer():
+        v = int(v)
+    s = _texto(v)
+    return "" if s in ("-", "—") else s
+
+
+# Nomes de campo que costumam guardar um identificador da UC (chave ou
+# alternativo): 'UC', 'UC VELHA', 'UC FORMATADO', 'id_uc_antigo'…
+_RE_CAMPO_ID = re.compile(r'^(?:uc|iduc)|iduc|ucvelh|ucantig|ucformat|ucanterior|ucnov')
+
+# Palavras que, no nome do campo, sugerem cada item do template (para quando
+# o arquivo não usa os nomes exatos — ex.: 'OPERANTE' → uc_operante).
+_SUGESTOES = [
+    ("id_uc_aneel_bordero", ("aneel", "bordero", "1095")),
+    ("uc_operante", ("operante",)),
+    ("medidor_atual_dicionario", ("medidoratual",)),
+    ("unidade_institucional", ("unidadejudiciaria", "unidadeinstitucional", "orgao")),
+    ("endereco_dicionario", ("endereco",)),
+    ("participa_rateio", ("participa",)),
+    ("demanda_futura_kw", ("demandafutura",)),
+]
+
+
+def sugerir_mapeamento(campos: list[str]) -> dict:
+    """{item_do_template: campo} por palavras-chave do nome — só sugestão."""
+    out = {}
+    for item, chaves in _SUGESTOES:
+        for c in campos:
+            if any(k in _n(c) for k in chaves):
+                out[item] = c
+                break
+    return out
+
+
 def _ids_do_registro(reg: dict) -> list[str]:
     """Todos os identificadores declarados no `id_uc` do registro."""
     bruto = reg.get(ITEM_CHAVE)
@@ -437,14 +473,19 @@ def analisar_arquivo(caminho: str) -> dict:
         {
           "registros": [...],            # como vieram
           "campos": [...],               # nomes de campo encontrados
+          "chave": campo,                # campo-chave (id_uc exato ou o 1º candidato)
+          "chave_exata": bool,           # True se existe 'id_uc' com esse nome
+          "candidatos_chave": [...],     # campos com cara de identificador de UC
+          "ids_extras_sugeridos": [...], # candidatos a identificadores alternativos
           "auto": {item_template: campo},# casados por nome idêntico
+          "sugeridos": {item: campo},    # casados por palavra-chave (só sugestão)
           "pendentes": [...],            # itens do template ainda sem campo
           "sobrando": [...],             # campos do arquivo fora do template
           "avisos": [...],
         }
 
-    Levanta ValueError quando não há registro nenhum ou quando `id_uc` não está
-    presente com esse nome exato — ele é a chave e não pode ser adivinhado.
+    Levanta ValueError quando não há registro nenhum ou quando não existe nem
+    `id_uc` nem um campo com cara de identificador de UC ('UC', 'UC VELHA'…).
     """
     regs = _ler_registros_brutos(caminho)
     if not regs:
@@ -459,18 +500,31 @@ def analisar_arquivo(caminho: str) -> dict:
                 campos.append(str(k))
 
     por_norma = {_n(c): c for c in campos}
-    if _n(ITEM_CHAVE) not in por_norma:
+    # Campos com cara de identificador — menos o da Resolução ANEEL 1095/2024
+    # (borderô), que é um item do template e não um formato da UC na fatura.
+    candidatos = [c for c in campos if _RE_CAMPO_ID.search(_n(c))
+                  and not any(k in _n(c) for k in ("aneel", "bordero", "1095"))]
+    chave_exata = _n(ITEM_CHAVE) in por_norma
+    if chave_exata:
+        chave = por_norma[_n(ITEM_CHAVE)]
+    elif candidatos:
+        # Preferência: 'UC' puro (a UC nova, sem formatação) — é o formato do
+        # dicionário do TJGO e o que o painel usa como chave.
+        chave = next((c for c in candidatos if _n(c) == "uc"), candidatos[0])
+    else:
         raise ValueError(
-            f"O arquivo precisa ter o item '{ITEM_CHAVE}' com esse nome exato — "
-            f"é ele que casa o cadastro com a fatura.\n\n"
-            f"Campos encontrados: {', '.join(campos[:12])}"
+            f"O arquivo precisa ter o item '{ITEM_CHAVE}' (ou um campo com o "
+            f"identificador da UC, como 'UC' / 'UC VELHA') — é ele que casa o "
+            f"cadastro com a fatura.\n\nCampos encontrados: {', '.join(campos[:12])}"
             + (" …" if len(campos) > 12 else ""))
 
     auto = {}
     for item in ITENS_MAPEAVEIS:
         if _n(item) in por_norma:
             auto[item] = por_norma[_n(item)]
-    usados = set(auto.values()) | {por_norma[_n(ITEM_CHAVE)]}
+    sugeridos = {i: c for i, c in sugerir_mapeamento(campos).items()
+                 if i not in auto and c != chave and c not in candidatos}
+    usados = set(auto.values()) | {chave}
 
     avisos = []
     sobrando = []
@@ -486,16 +540,33 @@ def analisar_arquivo(caminho: str) -> dict:
     return {
         "registros": regs,
         "campos": campos,
-        "chave": por_norma[_n(ITEM_CHAVE)],
+        "chave": chave,
+        "chave_exata": chave_exata,
+        "candidatos_chave": candidatos,
+        "ids_extras_sugeridos": [c for c in candidatos if c != chave],
         "auto": auto,
+        "sugeridos": sugeridos,
         "pendentes": [i for i in ITENS_MAPEAVEIS if i not in auto],
         "sobrando": sobrando,
         "avisos": avisos,
     }
 
 
+def _ids_de(valor) -> list[str]:
+    """Identificadores (texto) contidos num valor de campo: lista ou 'a; b'."""
+    if valor is None:
+        return []
+    if isinstance(valor, (list, tuple, set)):
+        partes = [_id_texto(v) for v in valor]
+    else:
+        s = _id_texto(valor)
+        partes = re.split(r"[;,/|]", s) if s else []
+    return [p.strip() for p in partes if p and p.strip() and _so_digitos(p)]
+
+
 def aplicar_mapeamento(analise: dict, mapeamento: dict | None = None,
-                       extras: dict | None = None) -> tuple[list[dict], list[str]]:
+                       extras: dict | None = None, chave: str | None = None,
+                       ids_extras: list[str] | None = None) -> tuple[list[dict], list[str]]:
     """
     Converte os registros brutos para os nomes do template.
 
@@ -503,15 +574,24 @@ def aplicar_mapeamento(analise: dict, mapeamento: dict | None = None,
     casamento automático. Item que ficar de fora não vira coluna.
     `extras`: {campo_no_arquivo: nome_da_coluna} — campos fora do template que
     devem virar coluna nova.
+    `chave`: campo com o identificador principal (o canônico); por padrão o
+    da análise. `ids_extras`: outros campos com identificadores da MESMA UC
+    (ex.: 'UC VELHA', 'UC FORMATADO') — entram no `id_uc` do registro depois
+    do principal, para casar a fatura em qualquer formato. Registro em que a
+    chave vem vazia/'-' mas há identificador alternativo NÃO é descartado: o
+    primeiro alternativo vira o canônico.
 
     Devolve (registros_normalizados, nomes_das_colunas_extras).
     """
     mapa_itens = dict(analise.get("auto") or {})
     mapa_itens.update({k: v for k, v in (mapeamento or {}).items() if v})
-    chave = analise["chave"]
+    chave = chave or analise["chave"]
+    ids_extras = [c for c in (ids_extras or []) if c and c != chave]
 
     extras_limpos = {}
     for campo, nome in (extras or {}).items():
+        if campo == chave or campo in ids_extras:
+            continue
         nome = _texto(nome) or str(campo)
         if _n(nome) in _CAMPOS_BLOQUEADOS or _n(campo) in _CAMPOS_BLOQUEADOS:
             continue
@@ -520,10 +600,14 @@ def aplicar_mapeamento(analise: dict, mapeamento: dict | None = None,
     saida = []
     for reg in analise["registros"]:
         novo = {}
-        ids = reg.get(chave)
-        if ids is None or not _texto(ids if not isinstance(ids, (list, tuple)) else ";".join(map(str, ids))):
+        ids: list[str] = []
+        for campo in [chave, *ids_extras]:
+            for ident in _ids_de(reg.get(campo)):
+                if _so_digitos(ident) not in {_so_digitos(x) for x in ids}:
+                    ids.append(ident)
+        if not ids:
             continue
-        novo[ITEM_CHAVE] = ids
+        novo[ITEM_CHAVE] = ids if len(ids) > 1 else ids[0]
         for item, campo in mapa_itens.items():
             if campo in reg:
                 v = _converter(reg.get(campo), _TIPO_POR_ITEM[item])

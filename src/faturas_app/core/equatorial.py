@@ -18,8 +18,11 @@ MESES = {'JAN': '01', 'FEV': '02', 'MAR': '03', 'ABR': '04', 'MAI': '05', 'JUN':
          'JUL': '07', 'AGO': '08', 'SET': '09', 'OUT': '10', 'NOV': '11', 'DEZ': '12'}
 
 
-def extrair_texto(pdf_path):
-    """Concatena APENAS as páginas úteis (que começam com 'ENDEREÇO DE ENTREGA:')."""
+def extrair_texto_info(pdf_path):
+    """
+    Concatena APENAS as páginas úteis (que começam com 'ENDEREÇO DE ENTREGA:').
+    Devolve (texto, usou_ocr).
+    """
     with pdfplumber.open(pdf_path) as pdf:
         pages = [unicodedata.normalize('NFC', pg.extract_text() or '')
                  for pg in pdf.pages]
@@ -27,7 +30,7 @@ def extrair_texto(pdf_path):
             if re.match(r'ENDERE[ÇC]O DE ENTREGA:', pg.strip(), re.IGNORECASE)]
     texto = '\n'.join(util) if util else '\n'.join(pages)
     if len(texto.strip()) >= 100:
-        return texto
+        return texto, False
     # PDF escaneado (ex.: faturas CELG-D antigas): OCR página a página,
     # como no processador da CHESP.
     from . import ocr
@@ -45,7 +48,41 @@ def extrair_texto(pdf_path):
             img = Image.frombytes('RGB', [pix.width, pix.height], pix.samples)
             paginas_ocr.append(unicodedata.normalize(
                 'NFC', pytesseract.image_to_string(img, lang='por', config='--psm 6')))
-    return '\n'.join(paginas_ocr)
+    return '\n'.join(paginas_ocr), True
+
+
+def extrair_texto(pdf_path):
+    return extrair_texto_info(pdf_path)[0]
+
+
+# Assinatura do texto EMBARALHADO do layout de 2022, em que a tabela de medição
+# e a de itens ficam lado a lado na página: quando duas linhas de tabelas
+# diferentes caem na mesma altura, o pdfplumber intercala os caracteres das
+# duas ("1 1 1 1 6 6 3 3 8 8 5 5 0 0 5 5 - - 7 7 E E N N E E R R …") e a linha
+# de medição inteira se perde. Doze tokens de um só caractere seguidos não
+# ocorrem em texto normal de fatura.
+_RE_TEXTO_EMBARALHADO = re.compile(r'(?:^|\s)(?:\S ){12,}\S')
+
+
+def extrair_texto_recortado(pdf_path):
+    """
+    Texto só da COLUNA DA ESQUERDA de cada página (até o início do cabeçalho
+    'Itens da Fatura'), onde fica a tabela de medição no layout de 2022.
+    Recortar antes de extrair impede a intercalação com a tabela de itens.
+    """
+    partes = []
+    with pdfplumber.open(pdf_path) as pdf:
+        for pg in pdf.pages:
+            x_corte = None
+            for w in pg.extract_words():
+                if w['text'] == 'Itens':
+                    x_corte = w['x0']
+                    break
+            if x_corte is None:
+                x_corte = pg.width * 0.5
+            rec = pg.crop((0, 0, max(x_corte - 2, 50), pg.height))
+            partes.append(unicodedata.normalize('NFC', rec.extract_text() or ''))
+    return '\n'.join(partes)
 
 
 def pf(s):
@@ -241,8 +278,16 @@ def extrair_fatura(texto, pdf_path, numero_forcado=None):
     # Sem o bloco de grandezas contratadas o campo fica NULO (não 0): zero é um
     # valor que a fatura pode imprimir de verdade, então usá-lo como "ausente"
     # apagaria a diferença entre "a fatura não traz o campo" e "a fatura diz 0".
+    # EXCEÇÃO: UC do grupo A faturada SEM CONTRATO de demanda (itens "CONSUMO
+    # S/ CONTRATO"/"DEMANDA S/ CONTRATO") — a caixa vem vazia justamente porque
+    # não há demanda contratada, e o valor correto é 0.
     m_dem = re.search(r'DEMANDA\s*-\s*kW\s+(\d+(?:[.,]\d+)?)', texto, re.IGNORECASE)
-    demanda_cont = pf(m_dem.group(1)) if m_dem else None
+    if m_dem:
+        demanda_cont = pf(m_dem.group(1))
+    elif re.search(r'\b(?:DEMANDA|CONSUMO)\s+S/\s*CONTRATO\b', texto, re.IGNORECASE):
+        demanda_cont = 0.0
+    else:
+        demanda_cont = None
     m_dem_g = re.search(r'DEMANDA\s+GERA[ÇC][ÃA]O\s*-\s*kW\s+(\d+(?:[.,]\d+)?)', texto, re.IGNORECASE)
     demanda_ger_cont = pf(m_dem_g.group(1)) if m_dem_g else None
 
@@ -296,7 +341,36 @@ def extrair_fatura(texto, pdf_path, numero_forcado=None):
         'data_leitura_atual':            fmt_br(m_leit.group(2)) if m_leit else None,
         'numero_dias_leitura':           numero_dias_leit,
         'data_proxima_leitura':          data_prox_leit,
+        'mensagens_importantes':         extrair_mensagens(texto),
     }
+
+
+# Caixa "MENSAGENS IMPORTANTES" (2025+) / "INFORMAÇÕES PARA O CLIENTE" (2023) /
+# texto livre sob o total (2022). No texto achatado ela começa logo depois da
+# linha do total a pagar ("AGO/2023 30/09/2023 R$***6.680,53" ou, no layout
+# 2025+, "JUL/2026 R$***96,87 30/08/2026") e vai até a primeira linha de
+# tabela: tributos, itens (linha com unidade + quantidade), cabeçalho da
+# medição, histórico de consumo ou o quadro "Reservado ao Fisco".
+_RE_MSG_INI = re.compile(
+    r'^(?:JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)/\d{4}\s+'
+    r'(?:\d{2}/\d{2}/\d{4}\s+)?R\$[^\n]*$', re.IGNORECASE | re.MULTILINE)
+_RE_MSG_FIM = re.compile(
+    r'^(?:PIS/PASEP|ICMS|COFINS|FORNECIMENTO|ITENS FINANCEIROS|Itens da Fatura'
+    r'|Medidor\s+Grandezas|USO DA RESERVA|TIPOS DE|M[ÊE]S/ANO|TOTAL\b'
+    r'|Cliente poder|\d+-\d+\s*(?:ENERGIA|DEMANDA|UFER|DMCR|CONSUMO))'
+    r'|^[^\n]{2,90}?\s(?:kWh|kW|kVArh)\s[\d.,]+', re.IGNORECASE | re.MULTILINE)
+
+
+def extrair_mensagens(texto):
+    m0 = _RE_MSG_INI.search(texto)
+    if not m0:
+        return None
+    resto = texto[m0.end():]
+    m1 = _RE_MSG_FIM.search(resto)
+    bloco = resto[:m1.start()] if m1 else resto[:1500]
+    linhas = [' '.join(l.split()) for l in bloco.splitlines()]
+    linhas = [l for l in linhas if l]
+    return ' '.join(linhas)[:3000] if linhas else None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1254,18 +1328,30 @@ def _distribuir_tributos_layout_antigo(resultado, id_fatura):
     maior['pis_cofins'] = round(pis_cofins - acum, 2)
 
 
-def _montar_resultado(txt, pdf_path, numero_forcado=None):
+def _montar_resultado(txt, pdf_path, numero_forcado=None, usou_ocr=False):
     fat = extrair_fatura(txt, pdf_path, numero_forcado)
+    fat['extraido_por_ocr'] = bool(usou_ocr)
     cli = extrair_cliente(txt)
     fid = fat['id_fatura']
     # id_uc final: quando ausente, usa 'NULO_<id_fatura>' (não deixa vazio).
     id_uc = fat.get('id_uc') or f"NULO_{fid}"
+    medicao = extrair_medicao(txt, fid, pdf_path)
+    # Layout 2022 com o texto das duas tabelas intercalado: reextrai a medição
+    # só da coluna da esquerda e fica com o que rendeu MAIS linhas. Só em PDF
+    # de fatura única (num PDF mesclado o recorte misturaria as faturas).
+    if numero_forcado is None and pdf_path and _RE_TEXTO_EMBARALHADO.search(txt):
+        try:
+            alternativa = extrair_medicao(extrair_texto_recortado(pdf_path), fid, pdf_path)
+        except Exception:  # noqa: BLE001 — recorte é só um reforço
+            alternativa = []
+        if len(alternativa) > len(medicao):
+            medicao = alternativa
     resultado = {
         'fatura':               fat,
         'unidade_consumidora':  cli,
         'itens_fatura': extrair_itens_fatura(txt, fid, id_uc),
         'impostos':     extrair_impostos(txt, fid),
-        'medicao':      extrair_medicao(txt, fid, pdf_path),
+        'medicao':      medicao,
     }
     _distribuir_tributos_layout_antigo(resultado, fid)
     carimbar_id_uc_competencia(resultado, id_uc, fat.get('competencia'))
@@ -1276,7 +1362,8 @@ def _montar_resultado(txt, pdf_path, numero_forcado=None):
 
 def processar_pdf(pdf_path):
     """Processa um único PDF da Equatorial e devolve as linhas de cada aba."""
-    return _montar_resultado(extrair_texto(pdf_path), pdf_path)
+    txt, usou_ocr = extrair_texto_info(pdf_path)
+    return _montar_resultado(txt, pdf_path, usou_ocr=usou_ocr)
 
 
 # Número de fatura (13 dígitos iniciando pelo ano) fora de códigos maiores.
@@ -1295,13 +1382,13 @@ def processar_pdf_multi(pdf_path):
     número próprio (página do caixa/canhoto) são anexados ao segmento anterior.
     Vias repetidas da mesma fatura são deduplicadas (fica o segmento maior).
     """
-    txt = extrair_texto(pdf_path)
+    txt, usou_ocr = extrair_texto_info(pdf_path)
     numeros = set(_RE_NUM_13.findall(txt))
     if len(numeros) <= 1:
-        return [_montar_resultado(txt, pdf_path)]
+        return [_montar_resultado(txt, pdf_path, usou_ocr=usou_ocr)]
     inicios = [m.start() for m in _RE_INICIO_DANF3E.finditer(txt)]
     if len(inicios) <= 1:
-        return [_montar_resultado(txt, pdf_path)]
+        return [_montar_resultado(txt, pdf_path, usou_ocr=usou_ocr)]
 
     cortes = inicios + [len(txt)]
     segmentos: list[tuple[str, str]] = []          # (numero_fatura, texto)
@@ -1318,5 +1405,5 @@ def processar_pdf_multi(pdf_path):
     for n, seg in segmentos:
         if n not in por_numero or len(seg) > len(por_numero[n]):
             por_numero[n] = seg
-    return [_montar_resultado(seg, pdf_path, numero_forcado=n)
+    return [_montar_resultado(seg, pdf_path, numero_forcado=n, usou_ocr=usou_ocr)
             for n, seg in por_numero.items()]

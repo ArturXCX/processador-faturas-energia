@@ -1,8 +1,10 @@
 """Ponto de entrada: `python -m faturas_app`.
 
-Modo de autoverificação (usado nos testes do executável empacotado): se a
-variável de ambiente FATURAS_SELFCHECK apontar para um caminho, o app NÃO abre a
-janela — apenas escreve um relatório de diagnóstico nesse arquivo e encerra.
+Modos:
+  - sem argumentos: abre a interface;
+  - `--cli …`: processa pastas de PDFs sem interface (ver faturas_app/cli.py);
+  - env FATURAS_SELFCHECK=<arquivo>: autoverificação do executável empacotado —
+    não abre janela, escreve um relatório de diagnóstico no arquivo e encerra.
 """
 import os
 import sys
@@ -51,9 +53,18 @@ def _selfcheck(destino: str) -> int:
 
 
 def main():
+    # Obrigatório no exe empacotado: o modo CLI usa um pool de processos, e no
+    # Windows cada processo filho reexecuta este mesmo exe.
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     destino = os.environ.get("FATURAS_SELFCHECK")
     if destino:
         sys.exit(_selfcheck(destino))
+    argv = sys.argv[1:]
+    if argv and argv[0] in ("--cli", "cli"):
+        from faturas_app.cli import main as cli_main
+        sys.exit(cli_main(argv[1:]))
     from faturas_app.gui.app import main as gui_main
     gui_main()
 

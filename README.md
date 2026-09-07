@@ -32,12 +32,20 @@ não são versionados neste repositório por conterem dados reais de faturas
 Veja **[LEIA-ME.txt](LEIA-ME.txt)** (incluído no `.zip`). Resumo: extrair o zip,
 abrir `FaturasDeEnergia.exe`, processar pastas de PDFs e salvar a planilha.
 
+**Rotina sem abrir o programa:** `processar.bat` (na pasta do app) lê a pasta
+`..\pdfs` (subpastas `equatorial`/`chesp`), gera `..\saida\faturas_energia.xlsx`
+e um CSV por aba, com cache por PDF (só os novos são lidos) e, havendo Excel
+instalado, cria `Faturas_PowerQuery.xlsx` — depois é só **Dados › Atualizar
+tudo**. Por trás está `FaturasDeEnergiaCLI.exe --cli …` (`--help` lista as
+opções: pastas, paralelismo, cache, importação do mapa de UCs).
+
 ---
 
 ## Arquitetura
 
 ```
 src/faturas_app/
+├── cli.py                # modo linha de comando (paralelo, cache por PDF, CSV por aba)
 ├── core/                 # núcleo, sem dependência de GUI
 │   ├── schema.py         # esquema CANÔNICO (colunas internas fixas) + apelidos + chaves de dedup
 │   ├── equatorial.py     # processador Equatorial (porte do notebook)

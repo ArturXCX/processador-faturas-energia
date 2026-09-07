@@ -56,25 +56,30 @@ def _texto_completo_chesp(txt):
 
 
 def extrair_texto_chesp(pdf_path):
+    return extrair_texto_chesp_info(pdf_path)[0]
+
+
+def extrair_texto_chesp_info(pdf_path):
     """
     Tenta pdfplumber. Normalmente a página 0 basta; nas faturas de jan–mai/2022
     a página 0 tem SÓ o cabeçalho e o corpo fica na página 1 (ainda em texto).
     Se nem juntando as páginas o corpo aparecer (PDF de imagem), usa OCR via
     PyMuPDF + pytesseract e junta com o texto que existir.
+    Devolve (texto, usou_ocr).
     """
     with pdfplumber.open(pdf_path) as pdf:
         paginas = [unicodedata.normalize('NFC', pg.extract_text() or '')
                    for pg in pdf.pages]
     txt = paginas[0] if paginas else ''
     if _texto_completo_chesp(txt):
-        return txt
+        return txt, False
     txt = '\n'.join(p for p in paginas if p.strip())
     if _texto_completo_chesp(txt):
-        return txt
+        return txt, False
     # Fallback/complemento: OCR (todas as páginas).
     if not ocr.configurar_ocr():
         if len(txt) >= 100:
-            return txt               # sem OCR: devolve ao menos o que há
+            return txt, False        # sem OCR: devolve ao menos o que há
         raise OCRIndisponivelError(
             f"O PDF '{os.path.basename(pdf_path)}' é escaneado e precisa de OCR, "
             "mas o motor de OCR (Tesseract) não foi encontrado."
@@ -92,7 +97,7 @@ def extrair_texto_chesp(pdf_path):
                 'NFC', pytesseract.image_to_string(img, lang='por', config='--psm 6')))
     ocr_txt = '\n'.join(p for p in ocr_paginas if p.strip())
     # híbrido: junta o cabeçalho em texto (limpo) com o corpo vindo do OCR
-    return (txt + '\n' + ocr_txt) if txt.strip() else ocr_txt
+    return ((txt + '\n' + ocr_txt) if txt.strip() else ocr_txt), True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -144,6 +149,15 @@ def extrair_fatura_chesp(texto, pdf_path):
 
     id_uc = _id_uc_chesp(texto)
     emissao = get(r'DATA DE\s*EMISS[ÃA]O:\s*(\d{2}/\d{2}/\d{4})', texto)
+    if not emissao:
+        # O rótulo quebra em duas linhas ("… SÉRIE 000 / DATA DE" / "CPF/CNPJ:
+        # … EMISSÃO: 16/01/2025") com texto de outra coluna no meio — era assim
+        # em 193 das 203 faturas, texto ou OCR. Mesmo padrão sem exigir que
+        # "DATA DE" e "EMISSÃO:" estejam colados.
+        emissao = get(r'DATA DE[^\n]{0,60}\n[^\n]{0,80}?EMISS[ÃA]O:?\s*(\d{2}/\d{2}/\d{4})',
+                      texto, flags=re.IGNORECASE)
+    if not emissao:
+        emissao = get(r'EMISS[ÃA]O:\s*(\d{2}/\d{2}/\d{4})', texto, flags=re.IGNORECASE)
 
     competencia = None
     m_comp = re.search(r'(\d{2}/\d{4})\s+\d{2}/\d{2}/\d{4}\s+R\$', texto)
@@ -238,6 +252,22 @@ def extrair_fatura_chesp(texto, pdf_path):
         # fora do bloco "GRANDEZAS CONTRATADAS" do layout colorido. O "CONTR" é o
         # que separa esse rótulo da linha do ITEM "DEMANDA 60 18,92000 1.135,20".
         m_dem = re.search(r'DEMANDA\s+CONTR\.?\s*:?\s*([\d.,]+)', texto, re.IGNORECASE)
+    if not m_dem:
+        # Fatura ESCANEADA: o OCR corrompe o rótulo da caixa ("Danenda fm
+        # panesam 100" para "Demanda fora ponta-kW 100", FATURA Nº 1830882).
+        # Aceita o rótulo com letras trocadas desde que mantenha o esqueleto
+        # D… f… p… e termine num número isolado no fim da linha.
+        m_dem = re.search(
+            r'\bD\w{3,7}\s+f\w{1,4}\s+p\w{4,8}\W{0,4}(?:kW\w?)?\s+(\d{1,4}(?:[.,]\d+)?)\s*$',
+            texto, re.IGNORECASE | re.MULTILINE)
+    if not m_dem and classif and classif.upper().startswith('A'):
+        # Último recurso, só no grupo A: a LINHA DE ITEM "DEMANDA kW 100
+        # 28,57290 2.857,29" — a quantidade faturada de demanda é a contratada
+        # (quando há ultrapassagem ela vem em item próprio). Exige a unidade
+        # "kW" para não casar o item "DEMANDA 45 18,92000 851,40" do Modelo 6,
+        # que tem rótulo de contratada próprio no cabeçalho.
+        m_dem = re.search(r'^DEMANDA\s+kW\w?\s+(\d{1,4}(?:[.,]\d+)?)\s+[\d.,]+\s+[\d.,]+',
+                          texto, re.IGNORECASE | re.MULTILINE)
     # Ausente = NULO, não 0 (ver mesma nota em equatorial.extrair_fatura).
     demanda_cont = pf(m_dem.group(1)) if m_dem else None
 
@@ -257,12 +287,15 @@ def extrair_fatura_chesp(texto, pdf_path):
         # (mesma semântica da coluna nas demais faturas).
         m_leit_m6 = re.search(
             r'ANTERIOR\s+ATUAL\s+PR[ÓO]XIMA\s+EMISS[ÃA]O\s+APRESENTA[ÇC][ÃA]O[^\n]*\n\s*'
-            r'(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})',
+            r'(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})'
+            r'(?:\s+(\d{2}/\d{2}/\d{4}))?',
             texto, re.IGNORECASE)
         if m_leit_m6:
             leit_ant = fmt_br(m_leit_m6.group(1))
             leit_atu = fmt_br(m_leit_m6.group(2))
             prox_leit = fmt_br(m_leit_m6.group(3))
+            if not emissao and m_leit_m6.group(4):
+                emissao = m_leit_m6.group(4)     # 4ª coluna: EMISSÃO
             try:
                 d1 = datetime.strptime(m_leit_m6.group(1), '%d/%m/%Y')
                 d2 = datetime.strptime(m_leit_m6.group(2), '%d/%m/%Y')
@@ -311,7 +344,30 @@ def extrair_fatura_chesp(texto, pdf_path):
         'data_leitura_atual':      leit_atu,
         'numero_dias_leitura':     dias_leit,
         'data_proxima_leitura':    prox_leit,
+        'mensagens_importantes':   extrair_mensagens_chesp(texto),
     }
+
+
+def extrair_mensagens_chesp(texto):
+    """
+    Caixa de mensagens sob o cabeçalho (ex.: "Bandeira Tarifária Vermelha -
+    Patamar 2"). No texto achatado fica entre a linha do protocolo de
+    autorização e o cabeçalho "Itens de fatura". No Modelo 6 (2022) a bandeira
+    vem numa linha própria do cabeçalho.
+    """
+    linhas = texto.splitlines()
+    i0 = next((i for i, l in enumerate(linhas)
+               if re.search(r'Protocolo de autoriza', l, re.IGNORECASE)), None)
+    i1 = next((i for i, l in enumerate(linhas)
+               if re.search(r'Itens d[ea] fatura', l, re.IGNORECASE)), None)
+    if i0 is not None and i1 is not None and i1 > i0:
+        bloco = [' '.join(l.split()) for l in linhas[i0 + 1:i1]]
+        # descarta ruído de OCR (linhas sem uma palavra de 3+ letras)
+        bloco = [l for l in bloco if re.search(r'[A-Za-zÀ-ú]{3,}', l)]
+        if bloco:
+            return ' '.join(bloco)[:3000]
+    m = re.search(r'^(Bandeira Tarif[^\n]+)$', texto, re.IGNORECASE | re.MULTILINE)
+    return ' '.join(m.group(1).split()) if m else None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -775,6 +831,7 @@ def extrair_medicao_chesp(texto, id_fatura):
             continue
         seen.add(key)
         medicao.append(linha)
+    layout_atual = bool(medicao)
     if not medicao:
         # Só quando o layout atual não rendeu NADA: faturas antigas (2022) usam
         # outros dois desenhos de tabela. Rodar apenas no vazio garante que
@@ -784,6 +841,17 @@ def extrair_medicao_chesp(texto, id_fatura):
         # Último recurso, pela mesma regra do "só no vazio": faturas ESCANEADAS
         # em que o OCR trocou dígitos por letras parecidas na própria tabela.
         medicao = _medicao_ocr_tolerante(texto, id_fatura, GRANDEZA, POSTO)
+    elif layout_atual:
+        # COMPLEMENTO no layout atual: numa fatura escaneada o OCR lê o zero
+        # como a letra "o" ("Demanda-kW Ponta o o 100 23"), então parte das
+        # linhas casa o padrão normal e o resto era perdido — 24 faturas A4
+        # saíam com 3–5 das 9 linhas. Acrescenta só as (grandeza, posto) que
+        # ainda não existem; num PDF de texto tudo já casou e nada muda.
+        vistos = {(l['Grandezas'], l['Postos horarios']) for l in medicao}
+        for linha in _medicao_ocr_tolerante(texto, id_fatura, GRANDEZA, POSTO):
+            if (linha['Grandezas'], linha['Postos horarios']) not in vistos:
+                vistos.add((linha['Grandezas'], linha['Postos horarios']))
+                medicao.append(linha)
     _padronizar_medicao_chesp(medicao)
     return medicao
 
@@ -975,8 +1043,9 @@ def _padronizar_medicao_chesp(medicao):
 def processar_pdf(pdf_path):
     """Processa um único PDF da CHESP e devolve as linhas de cada aba."""
     from .equatorial import carimbar_id_uc_competencia
-    txt = extrair_texto_chesp(pdf_path)
+    txt, usou_ocr = extrair_texto_chesp_info(pdf_path)
     fat = extrair_fatura_chesp(txt, pdf_path)
+    fat['extraido_por_ocr'] = bool(usou_ocr)
     cli = extrair_cliente_chesp(txt)
     fid = fat['id_fatura']
     id_uc = fat.get('id_uc') or f"NULO_{fid}"

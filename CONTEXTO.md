@@ -4,8 +4,16 @@ Documento de retomada do projeto **Processador de Faturas de Energia**. Leia
 este primeiro; para arquitetura aprofundada veja **[DOCUMENTACAO.md](DOCUMENTACAO.md)**,
 para build rápido **[README.md](README.md)**, para uso final **[LEIA-ME.txt](LEIA-ME.txt)**.
 
-Status: **pronto para uso** (esquema v2, jul/2026). Entregáveis atuais em `dist/`:
+Status: **pronto para uso** (v2.1.0, set/2026). Entregáveis atuais em `dist/`:
 `FaturasDeEnergia.zip` (~100 MB) e `FaturasDeEnergia-Setup.exe` (~72 MB).
+
+> **Branch de trabalho: `implementa-dicionario-uc-tarifas-demanda`** (master está
+> atrás; confira `git branch` antes de analisar código). Novidades de set/2026:
+> aba `validacao`, colunas `mensagens_importantes`/`extraido_por_ocr`, demanda 0
+> em UC "S/ CONTRATO", correções CHESP (data de emissão, demanda e medição em
+> escaneadas), medição do layout 2022 embaralhado, mapa de UCs com chave
+> escolhível + identificadores alternativos, e o **modo linha de comando**
+> (`FaturasDeEnergiaCLI.exe --cli`, `processar.bat`, CSV + Excel com Power Query).
 
 ---
 
@@ -26,11 +34,20 @@ A lógica de extração foi portada dos notebooks originais em `scripts_og/`.
 
 ## 2. Caminhos importantes (máquina atual)
 
-- **Raiz do projeto (working dir):**
-  `G:\Meu Drive\UFG\Semestre Atual\TJGO\PBI sobre o projeto\dashboard_faturas_energia\app_faturas`
+- **Raiz do projeto (working dir):** `D:\proj_ufg\app_tjgo` (clone git; a cópia
+  antiga ficava em `G:\…\dashboard_faturas_energia\app_faturas`)
 - **Código:** `src/faturas_app/` · **Ambiente:** `.venv/` (Python 3.12)
-- **PDFs (dados reais):** `..\pdfs\energia_tjgo\equatorial\{2022,2023_a_2024,2025_a_2026}` e `..\pdfs\energia_tjgo\chesp\{2022,2025_2026}`
-- **Conjunto de teste rápido:** `testes_exec\conjunto_faturas\{eq,chesp}` (66 EQ) — use para iterar sem ler as pastas gigantes.
+- **PDFs (dados reais, Google Drive — a letra mudou de G: para J:):**
+  `J:\Meu Drive\UFG\Semestre Atual\TJGO\PBI sobre o projeto\dashboard_faturas_energia\pdfs\energia_tjgo\{equatorial,chesp}\…`
+  (10.406 EQ + 203 CHESP, 8,4 GB). **Cópia local** para processar rápido:
+  `C:\Users\art-g\acervo_tjgo\energia_tjgo` (robocopy; ler do Drive custa ~1 s/PDF).
+- **Dicionário de UCs (fonte):** `…\dashboard_faturas_energia\JSON UCs\dicionario_uc_tjgo.json`
+  (221 UCs, cobre 100 % do acervo). A planilha `dicionario_tjgo.xlsx` (103 UCs) é
+  subconjunto dele — NÃO usar sozinha.
+- **Planilhas completas geradas:** `…\dashboard_faturas_energia\planilhas\faturas_energia_FINAL_v0N.xlsx`
+  (v03 = set/2026, gerada pelo CLI sobre a cópia local).
+- **Conjunto de teste rápido:** `C:\Users\art-g\acervo_tjgo\amostra\{equatorial,chesp}` (93 PDFs,
+  inclui as faturas-problema de set/2026) — `testes_exec\` do G: não existe neste clone.
 - **Entregáveis:** `dist\` · **Backups do código:** `backups\backup_<data>.zip`
 - **Tesseract (OCR) embutido:** `tesseract\` (~46 MB, montado por `build\fetch_tesseract.ps1`)
 - **Build LOCAL do PyInstaller:** `%LOCALAPPDATA%\FaturasBuild\` (ver §7)
@@ -52,6 +69,13 @@ $env:PYTHONPATH="src"; .\.venv\Scripts\python.exe tests\test_concat.py
 
 # processar via código (exemplo rápido, use o conjunto de teste):
 #   from faturas_app.core import equatorial; equatorial.processar_pdf(<pdf>)
+
+# processar um lote inteiro sem interface (paralelo + cache + CSV por aba):
+$env:PYTHONPATH="src"; .\.venv\Scripts\python.exe -m faturas_app --cli `
+  --pasta "C:\Users\art-g\acervo_tjgo\energia_tjgo" --subpastas `
+  --saida "C:\Users\art-g\acervo_tjgo\saida\faturas_energia_FINAL_v03.xlsx" `
+  --csv "C:\Users\art-g\acervo_tjgo\saida\csv" --paralelo 10 `
+  --mapa-uc "J:\...\JSON UCs\dicionario_uc_tjgo.json"     # ~10 min para 10,6 mil PDFs
 ```
 
 > **Atenção I/O do Google Drive:** a 1ª leitura de cada PDF vindo do `G:\` (Drive)
@@ -89,6 +113,16 @@ powershell -ExecutionPolicy Bypass -File build\fetch_tesseract.ps1   # monta tes
 - Aba **`glossario`** automática. Dedup só de **linha 100% idêntica** para itens/medição.
 - **Nome do arquivo** configurável ao salvar; **carimbo de atualização** no cabeçalho.
 - **Backup** de código: `build\backup.ps1`.
+- **Aba `validacao`** (set/2026): 1 linha por ocorrência — demanda × grupo AT/BT
+  do mapa, grupo divergente, UC fora do mapa, soma de itens × total, medição
+  vazia/incompleta, "S/ CONTRATO", lida por OCR (`derivados._derivar_validacao`).
+- **`mensagens_importantes`** (fatura/fatura_resumida) e **`extraido_por_ocr`** (fatura).
+- **Modo linha de comando** (`cli.py`, `FaturasDeEnergiaCLI.exe --cli`,
+  `ferramentas/processar.bat`): paralelo, cache JSON por PDF, CSV por aba,
+  `--mapa-uc` importa o cadastro sem perguntas; `ferramentas/gerar_powerquery.ps1`
+  cria o Excel com uma consulta Power Query por CSV (precisa de Excel ativado).
+- **Mapa de UCs**: chave escolhível na importação + "outros identificadores da
+  mesma UC" (ex.: `UC VELHA`) + sugestões por nome de campo.
 
 ### Pendência / decisão a confirmar
 `id_uc_atual_medidor` nas abas SEM coluna "Medidor" (fatura, itens_fatura, impostos):
@@ -107,8 +141,8 @@ como comentário no próprio `schema.py`, junto de `DEDUP_KEYS`.
 ## 5. Esquema atual das abas (ordem e colunas exatas)
 
 Ordem de saída: `fatura_resumida → fatura → unidade_consumidora → itens_fatura →
-tarifas → impostos → medicao → medicao_resumida → glossario` (+ aba oculta
-`_faturas_meta`).
+tarifas → impostos → medicao → medicao_resumida → validacao → glossario` (+ aba
+oculta `_faturas_meta`).
 
 Em TODA aba com `id_uc`, logo após ele vêm sempre, nesta ordem:
 `id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format,
@@ -137,7 +171,7 @@ classificacao_tarifaria, tipo_fornecimento, tensao_nominal_v, tensao_min_v,
 tensao_max_v, demanda_contratada_kw, demanda_geracao_contratada_kw,
 perdas_transformacao_pct, scee_geracao_ciclo, scee_saldo_kwh_total, scee_saldo_kwh_P,
 scee_saldo_kwh_FP, scee_saldo_kwh_HR, data_leitura_anterior, data_leitura_atual,
-numero_dias_leitura, data_proxima_leitura
+numero_dias_leitura, data_proxima_leitura, **mensagens_importantes, extraido_por_ocr**
 
 **unidade_consumidora** (renomeada de `cliente`): id_uc, id_uc_sem_format,
 id_uc_atual_medidor, id_uc_atual_medidor_sem_format, id_uc_canonico,
@@ -185,13 +219,17 @@ id_uc_sem_format, id_uc_atual_medidor, id_uc_atual_medidor_sem_format, medidor,
 competencia, valor_total_r$, classificacao_tarifaria, tipo_fornecimento,
 demanda_contratada_kw, demanda_geracao_contratada_kw, scee_geracao_ciclo,
 scee_saldo_kwh_total, scee_saldo_kwh_P, scee_saldo_kwh_FP, scee_saldo_kwh_HR,
-numero_dias_leitura
+numero_dias_leitura, mensagens_importantes
 
 **medicao_resumida** (derivada de medicao, filtrada em `ENERGIA GERAÇÃO - KWH`,
 `Consumo kWh`→`energia_geracao_kwh`): id_fatura, id_uc, id_uc_sem_format,
 id_uc_atual_medidor, id_uc_atual_medidor_sem_format, competencia, Grandezas,
 Postos horarios, Leitura Anterior, Leitura Atual, Const Medidor,
 energia_geracao_kwh, Medidor
+
+**validacao** *(derivada, recalculada do zero como `tarifas`)*: id_fatura, id_uc,
+id_uc_canonico (só com mapa), competencia, fornecedor, gravidade (erro/aviso/info),
+regra, detalhe. Não recebe `id_uc_atual` (excluída do laço de extras em `schema.py`).
 
 > Tudo é definido em `core/schema.py`. O bloco `id_uc_sem_format /
 > id_uc_atual_medidor / id_uc_atual_medidor_sem_format` (após id_uc) e
@@ -237,6 +275,9 @@ Núcleo (`src/faturas_app/core/`, sem GUI):
 - `equivalencias.py` — tabela item→item_normalizado (JSON em %APPDATA%).
 - `links.py` — coluna link_pdf. `glossario.py` — aba glossario. `build_info.py` — carimbo.
 - `controller.py` — orquestra o processamento das pastas (progresso/cancelar).
+- `../cli.py` — modo linha de comando (pool de processos, cache por PDF, CSV,
+  `importar_mapa_uc` sem perguntas). `../../ferramentas/` — `processar.bat` e
+  `gerar_powerquery.ps1`, copiados para a raiz da pasta distribuída pelo build.
 
 Interface (`src/faturas_app/gui/`):
 - `app.py` — janela + 3 abas + handler global de erros + cabeçalho (carimbo, OCR, tema).
@@ -357,6 +398,28 @@ Reverter: extraia o `.zip` por cima de `app_faturas`.
   texto legal ("CONFORME REN. ANEEL 414/10.") no fim da linha. Por isso os
   padrões de linha truncada usam um lookahead "não vem outro número depois"
   (`FIM`) em vez de âncora de fim de linha — não voltar a usar `$` ali.
+- **Demanda de UC "S/ CONTRATO" é 0, não nulo** (Equatorial, itens `CONSUMO/DEMANDA
+  S/ CONTRATO`; UC 10037643922 ago–dez/2023). Regra do cliente: toda UC AT tem
+  demanda (0 ou N); só BT fica nula. Demais ausências seguem nulas e caem na
+  `validacao` (`DEMANDA_AUSENTE_*`).
+- **CHESP escaneada**: rótulo da caixa de demanda corrompido pelo OCR (`Danenda fm
+  panesam 100`) → regex tolerante + último recurso pelo item `DEMANDA kW …` (só
+  grupo A); zero lido como "o" na medição → `_medicao_ocr_tolerante` roda como
+  COMPLEMENTO (24 faturas A4 saíam com 3–5 das 9 linhas); `data_emissao` com
+  "DATA DE / EMISSÃO:" em linhas diferentes (193/203 faturas saíam vazias).
+- **Layout 2022 da Equatorial com texto embaralhado** (`1 1 1 1 6 6 3 3 …`, duas
+  tabelas na mesma altura): medição reextraída da coluna da esquerda
+  (`extrair_texto_recortado`); 2 faturas no acervo. `dedupe_chars` não serve.
+- **Dicionário xlsx (103 UCs) é subconjunto do JSON (221)**: usar o JSON. O
+  importador precisa das colunas `UC VELHA`/`UC FORMATADO` marcadas como
+  identificadores alternativos, senão as faturas antigas ficam sem
+  `id_uc_canonico` (54 % do acervo, silenciosamente — por isso existe
+  `UC_FORA_DO_MAPA`). Backup do mapa anterior: `%APPDATA%\FaturasEnergia\mapa_uc.json.bak_2026-09-07`.
+- **Excel desta máquina com licença expirada**: a automação COM
+  (`gerar_powerquery.ps1`) é recusada aqui — validar na máquina do TJGO.
+- **`FINAL_v02` (03/09/2026) foi gerada por um build intermediário** (colunas
+  do dicionário embutido antigo: `unidade_judiciaria`, `grupo_fornecimento_at_bt`…).
+  A v03 usa o esquema atual; comparar contagens antes de trocar no Power BI.
 
 ---
 

@@ -57,7 +57,13 @@ def _calcular(dfs: dict) -> None:
     _derivar_tarifas(dfs)            # (5) depois de (4): tarifas leva item_normalizado
     _tipo_fornecimento_upper(dfs)    # (6)
     _remover_colunas_medidor(dfs)    # (7) depois de tudo que as usa
-    _reordenar_canonico(dfs)         # (8) por último, sempre
+    _derivar_validacao(dfs)          # (8) cruza fatura × mapa × itens × medição
+    _reordenar_canonico(dfs)         # (9) por último, sempre
+
+
+# Abas recalculadas do ZERO sobre o conjunto completo (não passam pelo dedup
+# incremental da concatenação): reinstaladas inteiras em `aplicar_concat`.
+ABAS_RECALCULADAS = ("tarifas", "validacao")
 
 
 def _extremos_por_uc(dfs: dict) -> None:
@@ -303,6 +309,188 @@ def _derivar_tarifas(dfs: dict) -> None:
     dfs["tarifas"] = dedup.reindex(columns=cols_saida).reset_index(drop=True)
 
 
+_RE_SUBGRUPO_A = re.compile(r'\bA[34]a?\b', re.IGNORECASE)
+_RE_SUBGRUPO_B = re.compile(r'\bB[1-4]\b', re.IGNORECASE)
+
+
+def grupo_da_classificacao(v) -> str | None:
+    """
+    'A' ou 'B' a partir de classificacao_tarifaria, pelo grupo de TENSÃO da
+    UC: "A A4 …"/"A4 - …" → A; "B B3 …"/"B3 - …" → B; "A OPT B3 …" (UC do
+    grupo A OPTANTE pela tarifa do grupo B) → A — continua ligada em alta
+    tensão e com demanda contratada, só é tarifada como B; é assim que o
+    mapa de UCs a cadastra (AT).
+    """
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return None
+    s = str(v)
+    if re.match(r'^\s*A\b', s) or _RE_SUBGRUPO_A.search(s):
+        return 'A'
+    if re.match(r'^\s*B\b', s) or _RE_SUBGRUPO_B.search(s):
+        return 'B'
+    return None
+
+
+def _grupo_do_mapa(uc_df: pd.DataFrame | None) -> dict:
+    """
+    {id_uc: 'AT'|'BT'} a partir de uma coluna do MAPA DE UCs em
+    unidade_consumidora cujo nome fale em fornecimento/grupo e cujos valores
+    tragam AT/BT (ex.: 'FORNECIMENTO (GRUPO AT/BT)' = 'TRIFÁSICO (AT)').
+    """
+    if uc_df is None or uc_df.empty or "id_uc" not in uc_df.columns:
+        return {}
+    for col in uc_df.columns:
+        n = re.sub(r'[^a-z]', '', str(col).lower())
+        if not ("fornecimento" in n or "grupo" in n) or "tipo" in n:
+            continue
+        vals = uc_df[col].dropna().astype(str)
+        if vals.empty or not vals.str.contains(r'\b(?:AT|BT)\b').mean() > 0.5:
+            continue
+        def _at_bt(v):
+            m = re.search(r'\b(AT|BT)\b', str(v)) if v is not None else None
+            return m.group(1) if m else None
+        return {k: v for k, v in zip(uc_df["id_uc"], uc_df[col].map(_at_bt)) if v}
+    return {}
+
+
+def _derivar_validacao(dfs: dict) -> None:
+    """
+    Aba 'validacao': 1 linha por ocorrência, com o que a fatura sozinha não
+    deixa conferir. Regras (gravidade):
+      erro  DEMANDA_AUSENTE_UC_AT     mapa diz AT e demanda_contratada_kw vazia
+      erro  DEMANDA_AUSENTE_GRUPO_A   fatura do grupo A (sem info do mapa) e demanda vazia
+      erro  ITENS_NAO_FECHAM          |soma dos itens − valor_total_r$| > R$ 1
+      erro  SEM_ID_UC                 fatura sem UC legível (id_uc NULO_…)
+      aviso GRUPO_DIVERGENTE_MAPA     grupo da fatura (A/B) ≠ grupo do mapa (AT/BT)
+      aviso DEMANDA_EM_UC_BT          demanda contratada > 0 numa UC/fatura do grupo B
+      aviso UC_FORA_DO_MAPA           (1 por UC) mapa carregado, UC não cadastrada
+      aviso MEDICAO_VAZIA             fatura sem nenhuma linha de medição
+      aviso MEDICAO_INCOMPLETA        grupo A com menos de 9 linhas de medição
+      info  DEMANDA_SEM_CONTRATO      demanda 0 porque os itens vieram "S/ CONTRATO"
+      info  LIDA_POR_OCR              fatura escaneada: campos podem ter ruído de OCR
+    Recalculada do zero a cada processamento/concatenação.
+    """
+    cols = schema.all_canonical("validacao")
+    fat = dfs.get("fatura")
+    if fat is None or getattr(fat, "empty", True) or "id_fatura" not in fat.columns:
+        dfs["validacao"] = pd.DataFrame(columns=cols)
+        return
+    itf = dfs.get("itens_fatura")
+    med = dfs.get("medicao")
+    uc = dfs.get("unidade_consumidora")
+
+    def col(nome):
+        return fat[nome] if nome in fat.columns else pd.Series([None] * len(fat), index=fat.index)
+
+    soma_itens = {}
+    sem_contrato = set()
+    if itf is not None and not itf.empty and {"id_fatura", "valor_r$"}.issubset(itf.columns):
+        vals = pd.to_numeric(itf["valor_r$"], errors="coerce").fillna(0.0)
+        soma_itens = vals.groupby(itf["id_fatura"]).sum().to_dict()
+        if "item" in itf.columns:
+            mask = itf["item"].astype(str).str.contains(r'S/\s*CONTRATO', case=False, regex=True)
+            sem_contrato = set(itf.loc[mask, "id_fatura"])
+    n_med = {}
+    if med is not None and not med.empty and "id_fatura" in med.columns:
+        n_med = med.groupby("id_fatura").size().to_dict()
+    grupo_mapa = _grupo_do_mapa(uc)
+    mapa_ativo = dicionario_uc.ativo()
+    info_uc = {}
+    if uc is not None and not uc.empty and "id_uc" in uc.columns:
+        for _, r in uc.drop_duplicates("id_uc").iterrows():
+            info_uc[r["id_uc"]] = (r.get("razao_social"), r.get("municipio"))
+
+    linhas = []
+    fora_mapa: dict = {}
+    canon = col("id_uc_canonico")
+    demanda = pd.to_numeric(col("demanda_contratada_kw"), errors="coerce")
+    total = pd.to_numeric(col("valor_total_r$"), errors="coerce")
+    ocr = col("extraido_por_ocr")
+
+    def add(i, gravidade, regra, detalhe):
+        linhas.append({
+            "id_fatura": fat.at[i, "id_fatura"],
+            "id_uc": fat.at[i, "id_uc"] if "id_uc" in fat.columns else None,
+            "id_uc_canonico": canon.at[i],
+            "competencia": fat.at[i, "competencia"] if "competencia" in fat.columns else None,
+            "fornecedor": fat.at[i, "fornecedor"] if "fornecedor" in fat.columns else None,
+            "gravidade": gravidade, "regra": regra, "detalhe": detalhe,
+        })
+
+    for i in fat.index:
+        fid = fat.at[i, "id_fatura"]
+        id_uc = fat.at[i, "id_uc"] if "id_uc" in fat.columns else None
+        grupo = grupo_da_classificacao(col("classificacao_tarifaria").at[i])
+        gm = grupo_mapa.get(id_uc)
+        dem = demanda.at[i]
+        dem_vazia = pd.isna(dem)
+
+        if isinstance(id_uc, str) and id_uc.startswith("NULO_"):
+            add(i, "erro", "SEM_ID_UC", "a fatura não trouxe UC legível")
+        if gm == "AT" and dem_vazia:
+            add(i, "erro", "DEMANDA_AUSENTE_UC_AT",
+                "o mapa de UCs diz AT (grupo A) e a fatura saiu sem demanda contratada")
+        elif grupo == "A" and dem_vazia:
+            add(i, "erro", "DEMANDA_AUSENTE_GRUPO_A",
+                f"classificação '{col('classificacao_tarifaria').at[i]}' é do grupo A e a "
+                "fatura saiu sem demanda contratada")
+        if grupo and gm and ((grupo == "A") != (gm == "AT")):
+            add(i, "aviso", "GRUPO_DIVERGENTE_MAPA",
+                f"fatura no grupo {grupo} ('{col('classificacao_tarifaria').at[i]}'), "
+                f"mapa de UCs diz {gm}")
+        if not dem_vazia and dem > 0 and (gm == "BT" or (gm is None and grupo == "B")):
+            add(i, "aviso", "DEMANDA_EM_UC_BT",
+                f"demanda contratada {dem:g} kW numa UC/fatura do grupo B")
+        if fid in sem_contrato and not dem_vazia and dem == 0:
+            add(i, "info", "DEMANDA_SEM_CONTRATO",
+                "itens 'S/ CONTRATO': UC sem contrato de demanda no mês (demanda = 0)")
+        tot = total.at[i]
+        if fid in soma_itens and not pd.isna(tot):
+            dif = soma_itens[fid] - tot
+            if abs(dif) > 1.0:
+                add(i, "erro", "ITENS_NAO_FECHAM",
+                    f"soma dos itens R$ {soma_itens[fid]:,.2f} × total R$ {tot:,.2f} "
+                    f"(diferença R$ {dif:,.2f})")
+        n = n_med.get(fid, 0)
+        # Mínimo de linhas de uma tabela de medição COMPLETA do grupo A: 9 na
+        # Equatorial (11 no layout 2023+, 15 no de 2022) e 8 na CHESP (o layout
+        # de ago–nov/2022 tem 8; o atual, 9).
+        minimo = 8 if str(fat.at[i, "fornecedor"] if "fornecedor" in fat.columns else "") == "CHESP" else 9
+        if n == 0:
+            add(i, "aviso", "MEDICAO_VAZIA", "nenhuma linha de medição extraída")
+        elif grupo == "A" and n < minimo:
+            add(i, "aviso", "MEDICAO_INCOMPLETA",
+                f"{n} linha(s) de medição numa fatura do grupo A (esperado ≥ {minimo})")
+        if ocr.at[i] is True or str(ocr.at[i]).lower() == "true":
+            add(i, "info", "LIDA_POR_OCR",
+                "PDF escaneado: valores lidos por OCR podem ter ruído")
+        if mapa_ativo and id_uc is not None and not (isinstance(id_uc, str) and id_uc.startswith("NULO_")) \
+                and dicionario_uc.buscar(id_uc) is None:
+            fora_mapa.setdefault(id_uc, [0, i])
+            fora_mapa[id_uc][0] += 1
+
+    for id_uc, (n, i) in fora_mapa.items():
+        razao, munic = info_uc.get(id_uc, (None, None))
+        linhas.append({
+            "id_fatura": None, "id_uc": id_uc, "id_uc_canonico": canon.at[i],
+            "competencia": None,
+            "fornecedor": fat.at[i, "fornecedor"] if "fornecedor" in fat.columns else None,
+            "gravidade": "aviso", "regra": "UC_FORA_DO_MAPA",
+            "detalhe": f"{n} fatura(s); UC não está no mapa de UCs"
+                       + (f" — {razao}, {munic}" if razao or munic else ""),
+        })
+
+    ordem = {"erro": 0, "aviso": 1, "info": 2}
+    df = pd.DataFrame(linhas, columns=cols)
+    if not df.empty:
+        df["_o"] = df["gravidade"].map(ordem)
+        df = df.sort_values(["_o", "regra", "id_fatura"], kind="mergesort").drop(columns="_o")
+    if not mapa_ativo:
+        # Mesma regra das demais abas: sem mapa de UCs, nenhuma aba tem id_uc_canonico.
+        df = df.drop(columns=["id_uc_canonico"])
+    dfs["validacao"] = df.reset_index(drop=True)
+
+
 def _tipo_fornecimento_upper(dfs: dict) -> None:
     """tipo_fornecimento ('fatura'/'fatura_resumida'): valores não vazios em
     maiúsculas (independe da fornecedora)."""
@@ -360,32 +548,33 @@ def aplicar_concat(res_dfs: dict, meta: dict | None) -> None:
     _calcular(canon)
 
     for aba, cdf in canon.items():
-        # 'tarifas' fica FORA do writeback coluna-a-coluna: ela é recalculada do
-        # zero (número de linhas próprio, sem relação com o da planilha enviada)
-        # e reinstalada inteira logo abaixo. Escrever coluna a coluna aqui daria
-        # erro de tamanho assim que a planilha enviada já tivesse a aba.
-        if aba == "tarifas" or aba not in res_dfs:
+        # 'tarifas'/'validacao' ficam FORA do writeback coluna-a-coluna: são
+        # recalculadas do zero (número de linhas próprio, sem relação com o da
+        # planilha enviada) e reinstaladas inteiras logo abaixo. Escrever
+        # coluna a coluna aqui daria erro de tamanho assim que a planilha
+        # enviada já tivesse a aba.
+        if aba in ABAS_RECALCULADAS or aba not in res_dfs:
             continue
         for canonico in COLUNAS_DERIVADAS:
             if canonico in cdf.columns:
                 exib = reverso.get(aba, {}).get(canonico, canonico)
                 res_dfs[aba][exib] = cdf[canonico].values
 
-    # 'tarifas' é instalada/sobrescrita inteira, como 'unidade_consumidora' logo
-    # abaixo: não passa pelo dedup genérico de concat.py. Isso vale também
-    # quando a planilha enviada foi gerada por uma versão anterior do app e nem
-    # tinha a aba — ela é criada aqui.
-    res_dfs["tarifas"] = canon.get(
-        "tarifas", pd.DataFrame(columns=schema.all_canonical("tarifas")))
-    # Registra a aba nos metadados (nomes canônicos = exibidos, já que ela é
-    # sempre regerada por aqui): sem isso, o próximo upload dessa planilha não
-    # teria mapa para 'tarifas' e cairia no casamento por similaridade.
-    if isinstance(meta, dict):
-        meta.setdefault("abas", {})["tarifas"] = {
-            "incluida": True,
-            "colunas": [{"exibido": c, "canonico": c, "incluida": True}
-                        for c in res_dfs["tarifas"].columns],
-        }
+    # 'tarifas' e 'validacao' são instaladas/sobrescritas inteiras, como
+    # 'unidade_consumidora' logo abaixo: não passam pelo dedup genérico de
+    # concat.py. Isso vale também quando a planilha enviada foi gerada por uma
+    # versão anterior do app e nem tinha a aba — ela é criada aqui.
+    for aba in ABAS_RECALCULADAS:
+        res_dfs[aba] = canon.get(aba, pd.DataFrame(columns=schema.all_canonical(aba)))
+        # Registra a aba nos metadados (nomes canônicos = exibidos, já que ela
+        # é sempre regerada por aqui): sem isso, o próximo upload dessa planilha
+        # não teria mapa para ela e cairia no casamento por similaridade.
+        if isinstance(meta, dict):
+            meta.setdefault("abas", {})[aba] = {
+                "incluida": True,
+                "colunas": [{"exibido": c, "canonico": c, "incluida": True}
+                            for c in res_dfs[aba].columns],
+            }
 
     # Dedup ao final (linha completa) — direto no resultado (nomes exibidos),
     # já que a contagem de linhas de `canon` pode ter mudado com o dedup interno.

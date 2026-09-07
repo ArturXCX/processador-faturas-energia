@@ -18,9 +18,10 @@ RAIZ = Path(__file__).resolve().parent.parent
 ORIGEM = RAIZ / "src" / "faturas_app"
 DESTINO = RAIZ / "docs" / "py" / "faturas_app"
 
-# A GUI não vai para a web (Tkinter não roda no navegador) e `borderos.py`
-# depende do PyMuPDF, que não tem build WebAssembly.
-IGNORAR = shutil.ignore_patterns("__pycache__", "*.pyc", "gui", "borderos.py")
+# A GUI não vai para a web (Tkinter não roda no navegador), `borderos.py`
+# depende do PyMuPDF, que não tem build WebAssembly, e `cli.py` (pool de
+# processos, disco) é só do pacote desktop.
+IGNORAR = shutil.ignore_patterns("__pycache__", "*.pyc", "gui", "borderos.py", "cli.py")
 
 
 def main() -> int:
