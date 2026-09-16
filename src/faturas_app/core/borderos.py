@@ -593,16 +593,19 @@ def processar_pdf(path: str) -> ResultadoBordero:
 
     soma = round(sum(u["valor"] for u in unidades if u.get("valor") is not None), 2)
     bate = (total is not None) and (abs(soma - total) < TOL_TOTAL)
+    # OCR que não acha nenhuma UC (ex.: o PDF só traz as páginas de cabeçalho) é detalhe não extraído,
+    # não soma que não bate.
+    sem_detalhe = escaneado or (usou_ocr and not unidades)
 
     obs = []
     if usou_ocr:
         obs.append("PDF digitalizado: lido por OCR (conferir valores).")
-    if escaneado:
+    if sem_detalhe:
         obs.append("Páginas de detalhe digitalizadas (imagem): UCs não extraídas.")
     elif not bate:
         obs.append(f"Soma das UCs ({_fmt_valor(soma)}) não bate com o total "
                    f"({_fmt_valor(total)}).")
-    if contas is not None and not escaneado and len(unidades) != contas:
+    if contas is not None and not sem_detalhe and len(unidades) != contas:
         obs.append(f"Contagem extraída ({len(unidades)}) difere do informado ({contas}).")
 
     bordero = {
@@ -619,7 +622,7 @@ def processar_pdf(path: str) -> ResultadoBordero:
         "valor_total_bruto": bruto,
         "valor_total_retencoes": retencoes,
         "soma_valores_extraidos": soma,
-        "bate_total": "SIM" if bate else ("N/A" if escaneado else "NÃO"),
+        "bate_total": "SIM" if bate else ("N/A" if sem_detalhe else "NÃO"),
         "escaneado": "SIM" if (escaneado or usou_ocr) else "NÃO",
         "observacao": " ".join(obs),
         # fora de BORDERO_COLS (não vira coluna da planilha do app); usado pela carga do banco
