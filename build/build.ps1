@@ -42,6 +42,9 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller falhou (exit $LASTEXITCODE)." }
 if (-not (Test-Path (Join-Path $appLocal "FaturasDeEnergia.exe"))) {
   throw "Executavel nao gerado em $appLocal"
 }
+if (-not (Test-Path (Join-Path $appLocal "FaturasDeEnergiaCLI.exe"))) {
+  throw "Executavel do modo linha de comando (FaturasDeEnergiaCLI.exe) nao gerado em $appLocal"
+}
 
 # O pacote precisa ser AUTOSSUFICIENTE: quem recebe o .zip nao deve instalar
 # nada (em especial o Tesseract, usado no OCR das faturas CHESP escaneadas).
@@ -68,6 +71,11 @@ Write-Host "OK pacote autossuficiente (OCR + recursos embutidos)"
 # Inclui o guia do usuario na pasta distribuida, se existir.
 $leia = Join-Path $root "LEIA-ME.txt"
 if (Test-Path $leia) { Copy-Item $leia $appLocal -Force }
+
+# Ferramentas do modo linha de comando (processar.bat + gerador do Excel com
+# Power Query) vao junto do exe, na raiz da pasta distribuida.
+$ferr = Join-Path $root "ferramentas"
+if (Test-Path $ferr) { Copy-Item (Join-Path $ferr "*") $appLocal -Force }
 
 # .zip gerado a partir do build LOCAL, gravado no Drive (escrita de 1 arquivo).
 New-Item -ItemType Directory -Force -Path (Join-Path $root "dist") | Out-Null

@@ -21,9 +21,15 @@ Python instalado**) que lê PDFs de faturas de energia de **duas distribuidoras*
 2. **Adicionar a uma planilha**: sobe uma planilha existente (que pode ter sido
    renomeada/editada) e concatena novas faturas, remapeando colunas.
 
+E um **modo linha de comando** (`FaturasDeEnergiaCLI.exe --cli …`, ou
+`processar.bat`) para rotina sem interface: pool de processos, cache JSON por
+PDF (só os novos são lidos) e CSV por aba para um Excel com Power Query — ver
+§4 e `ferramentas/`.
+
 Recursos transversais: **OCR embutido** (faturas CHESP escaneadas), coluna de
-**link do PDF**, **mapa de UCs** (cadastro importado pelo usuário), **glossário**
-automático, **nome do arquivo** configurável, e carimbo de **última atualização**.
+**link do PDF**, **mapa de UCs** (cadastro importado pelo usuário), aba de
+**validação** do lote, **glossário** automático, **nome do arquivo**
+configurável, e carimbo de **última atualização**.
 
 ---
 
@@ -31,7 +37,7 @@ automático, **nome do arquivo** configurável, e carimbo de **última atualiza�
 
 Ordem de saída: `fatura_resumida` → `fatura` → `unidade_consumidora` →
 `itens_fatura` → `tarifas` → `impostos` → `medicao` → `medicao_resumida` →
-`glossario` (+ aba oculta `_faturas_meta` com metadados).
+`validacao` → `glossario` (+ aba oculta `_faturas_meta` com metadados).
 
 | Aba | Conteúdo | Origem |
 |---|---|---|
@@ -43,7 +49,19 @@ Ordem de saída: `fatura_resumida` → `fatura` → `unidade_consumidora` →
 | `medicao` | grandezas medidas por posto horário | processador |
 | `fatura_resumida` | **1ª aba**; subconjunto de `fatura` (inclui `valor_total_r$` e `medidor`) | **derivada** de `fatura` |
 | `medicao_resumida` | `medicao` só de `ENERGIA GERAÇÃO - KWH`, `Consumo kWh`→`energia_geracao_kwh` | **derivada** de `medicao` |
-| `glossario` | significado de colunas/valores/itens (460+ termos) | `core/glossario.py` |
+| `validacao` | 1 linha por ocorrência (`gravidade` erro/aviso/info, `regra`, `detalhe`): demanda × grupo AT/BT do mapa, UC fora do mapa, soma de itens × total, medição vazia/incompleta, fatura lida por OCR | **derivada** (`derivados._derivar_validacao`) |
+| `glossario` | significado de colunas/valores/itens/regras (470+ termos) | `core/glossario.py` |
+
+A aba **`validacao`** é o cruzamento que a fatura sozinha não permite: o grupo
+de tensão da fatura (`grupo_da_classificacao`: `A A4 …`/`A4 - …` → A; `B B3 …`
+→ B; `A OPT B3` → A, porque a UC optante pela tarifa B continua em alta tensão
+com demanda contratada — 4 UCs em 2022) contra o grupo de fornecimento do
+MAPA DE UCs (qualquer coluna extra cujo nome fale em fornecimento/grupo e cujos
+valores tragam `AT`/`BT`, ex.: `FORNECIMENTO (GRUPO AT/BT)` = `TRIFÁSICO (AT)`).
+Regras e gravidades estão no docstring de `_derivar_validacao` e na categoria
+"Regra de validação" do glossário. Recalculada do zero em todo processamento e
+concatenação, como `tarifas` (`derivados.ABAS_RECALCULADAS`); sem mapa, sai sem
+a coluna `id_uc_canonico` (mesma regra das outras abas).
 
 A aba **`tarifas`** guarda a linha do tempo das tarifas: nomes de item mudam
 quando a distribuidora reformula a fatura, mas a tarifa numérica por trás
@@ -91,11 +109,25 @@ Colunas-chave especiais:
   (aba Parâmetros). Desligada, as três somem de todas as abas.
 - **`demanda_contratada_kw` / `demanda_geracao_contratada_kw`** vêm SEMPRE do
   PDF da fatura. Ficam **vazias** quando a fatura não traz o campo de grandezas
-  contratadas; `0` só quando a fatura imprime esse valor explicitamente (antes,
-  ausência e zero eram gravados igual). A CHESP "Modelo 6" (nota antiga P&B,
-  jan–mai/2022) imprime esse valor no cabeçalho (`DEMANDA CONTR.: 60`), fora do
-  bloco `GRANDEZAS CONTRATADAS` do layout colorido — há um regex próprio para
-  ele em `chesp.py`.
+  contratadas; `0` quando a fatura imprime esse valor explicitamente (antes,
+  ausência e zero eram gravados igual) **ou quando a UC do grupo A é faturada
+  "S/ CONTRATO"** (itens `CONSUMO/DEMANDA S/ CONTRATO`; a caixa vem vazia
+  justamente porque não há contrato — UC 10037643922, ago–dez/2023). A CHESP
+  "Modelo 6" (nota antiga P&B, jan–mai/2022) imprime esse valor no cabeçalho
+  (`DEMANDA CONTR.: 60`), fora do bloco `GRANDEZAS CONTRATADAS` do layout
+  colorido — há um regex próprio para ele em `chesp.py`; nas CHESP escaneadas o
+  rótulo da caixa pode sair corrompido pelo OCR (`Danenda fm panesam 100`) e há
+  um regex tolerante + um último recurso pela linha do item `DEMANDA kW …` (só
+  no grupo A).
+- **`mensagens_importantes`** (`fatura`/`fatura_resumida`): a caixa de mensagens
+  da fatura. Equatorial: começa depois da linha do total (`AGO/2023 30/09/2023
+  R$***…` ou, no layout 2025+, `JUL/2026 R$***… 30/08/2026`) e vai até a
+  primeira linha de tabela (tributos/itens/medição/histórico) —
+  `equatorial.extrair_mensagens`. CHESP: entre a linha do protocolo e o
+  cabeçalho `Itens de fatura` (`Bandeira Tarifária …`); no Modelo 6, a linha da
+  bandeira no cabeçalho — `chesp.extrair_mensagens_chesp`. Caixa vazia → vazio.
+- **`extraido_por_ocr`** (`fatura`): `True` quando o texto veio do Tesseract
+  (`extrair_texto_info`/`extrair_texto_chesp_info` devolvem `(texto, usou_ocr)`).
 - **`medidor`** (só em `fatura`/`fatura_resumida`): medidor (moda) da fatura,
   vindo da aba `medicao`.
 - **`unidade_consumidora.primeira_competencia` / `ultima_competencia` /
@@ -120,7 +152,8 @@ Colunas-chave especiais:
 ```
 src/faturas_app/
 ├── __init__.py          APP_NAME, __version__
-├── __main__.py          entrada; modo selfcheck (env FATURAS_SELFCHECK=<arquivo>)
+├── __main__.py          entrada: GUI, `--cli …` ou selfcheck (env FATURAS_SELFCHECK=<arquivo>); multiprocessing.freeze_support()
+├── cli.py               modo linha de comando: pool de processos, cache JSON por PDF, CSV por aba, importação do mapa sem perguntas
 ├── core/                NÚCLEO — sem dependência de GUI (testável isolado)
 │   ├── schema.py        ESQUEMA CANÔNICO: abas, colunas, cores, chaves de dedup, apelidos
 │   ├── equatorial.py    processador Equatorial (regexes portadas do notebook)
@@ -131,8 +164,8 @@ src/faturas_app/
 │   ├── excel_io.py      escrita estilizada + aba oculta de metadados / leitura
 │   ├── concat.py        concatenação com remapeamento canônico + dedup
 │   ├── links.py         gera coluna link_pdf (busca no Drive pelo nome / modelo)
-│   ├── derivados.py     colunas recalculadas do zero: unidade_consumidora.(primeira|ultima)_*, id_uc_atual_medidor(+sem_format), id_uc_canonico, medidor, item_normalizado, e a aba `tarifas` inteira
-│   ├── dicionario_uc.py MAPA DE UCs importado pelo usuário (%APPDATA%/mapa_uc.json; o app não embarca nenhum): TEMPLATE, importação com mapeamento (analisar_arquivo/aplicar_mapeamento), id_uc_canonico e as colunas de cadastro. Guarda também se a identificação por medidor está ligada
+│   ├── derivados.py     colunas recalculadas do zero: unidade_consumidora.(primeira|ultima)_*, id_uc_atual_medidor(+sem_format), id_uc_canonico, medidor, item_normalizado, e as abas `tarifas` e `validacao` inteiras
+│   ├── dicionario_uc.py MAPA DE UCs importado pelo usuário (%APPDATA%/mapa_uc.json; o app não embarca nenhum): TEMPLATE, importação com mapeamento (analisar_arquivo/aplicar_mapeamento — chave escolhível, identificadores alternativos, sugestões por nome), id_uc_canonico e as colunas de cadastro. Guarda também se a identificação por medidor está ligada
 │   ├── equivalencias.py tabela item→item_normalizado persistida em %APPDATA%/FaturasEnergia
 │   ├── hardcodes.py     regras SE→ENTÃO do usuário (erro da concessionária), persistidas em %APPDATA%/FaturasEnergia
 │   ├── glossario.py     monta a aba glossario (docs + conceitos + itens do PDF)
@@ -150,6 +183,8 @@ src/faturas_app/
 │   └── worker.py        processamento em thread + fila de eventos
 └── resources/           glossario_itens.json (301 itens), correcoes.json, build_info.txt (carimbo)
                          (NÃO há dados de instituição: hardcodes e dicionário de UC são importados pelo usuário)
+ferramentas/             vai para a raiz da pasta distribuída: processar.bat (rotina do modo CLI) e
+                         gerar_powerquery.ps1 (Excel com uma consulta Power Query por CSV, via automação do Excel)
 ```
 
 **Regra de ouro:** o `core/` nunca importa `gui/`. Toda a lógica de negócio é
@@ -186,6 +221,51 @@ testável sem abrir janela (ver `tests/`).
    enviada** (respeitando renomeações/exclusões) e empilha, com dedup.
 5. `hardcodes.aplicar_dfs` (por último, sobre antigos + novos) + `uc_map.aplicar`
    (opcional) + `glossario.garantir_glossario` + salvar.
+
+### Modo linha de comando (`cli.py`)
+
+`FaturasDeEnergiaCLI.exe --cli --pasta <dir>[=FORNECEDOR] [--subpastas] --saida
+<xlsx> [--csv <dir>] [--cache <dir>] [--paralelo N] [--mapa-uc <arq>]` (em
+desenvolvimento: `python -m faturas_app --cli …`). Mesmo pós-processamento da
+aba 1 (`cli.consolidar` = to_dataframes → links → derivados → hardcodes →
+Perfil → glossário → excel_io), com:
+
+- **Fornecedora por pasta**: depois do `=` ou inferida de qualquer pasta do
+  caminho que contenha `chesp` / `equatorial`. Assim `--pasta acervo --subpastas`
+  processa `acervo\equatorial\…` e `acervo\chesp\…` de uma vez.
+- **Paralelismo**: `ProcessPoolExecutor` sobre `_processar_um` (função de módulo,
+  picklável); `ex.map` preserva a ordem da listagem, então o lote entra no
+  `Dataset` na mesma ordem da interface. O exe empacotado precisa do
+  `multiprocessing.freeze_support()` no início de `__main__.main` (cada filho
+  reexecuta o exe). 93 PDFs (50 CHESP, 10 por OCR) em ~50 s com 6 processos;
+  o acervo inteiro (10,6 mil) em minutos, contra horas sequencial.
+- **Cache** (`--cache`, padrão `<pasta da saída>\cache_faturas`): um JSON por
+  PDF, chave = sha1(versão do app + caminho + tamanho + mtime). Rodar de novo só
+  lê os PDFs novos/alterados; trocar a versão do app invalida tudo.
+- **CSV por aba** (`--csv`): `;` e vírgula decimal (`df.to_csv(sep=";",
+  decimal=",")`, UTF-8 com BOM) — o formato que o Excel pt-BR e o Power Query
+  com cultura `pt-BR` leem sem configurar nada.
+- **`--mapa-uc`**: importa o cadastro como a aba Parâmetros faria, sem
+  perguntas (`cli.importar_mapa_uc`): chave `id_uc` ou o campo mais parecido,
+  identificadores alternativos sugeridos todos marcados, itens do template por
+  nome exato ou palavra-chave (`dicionario_uc.sugerir_mapeamento`) e os demais
+  campos como colunas extras com nome normalizado (`_slug`). Grava no mesmo
+  `%APPDATA%\FaturasEnergia\mapa_uc.json` da interface.
+- Saídas: planilha, `<saida>_erros.txt` (se houver), `--log` opcional e um
+  resumo (linhas por aba, contagem da `validacao`) no console.
+
+`ferramentas/processar.bat` embrulha isso para a rotina mensal (pastas `..\pdfs`
+→ `..\saida`) e chama `gerar_powerquery.ps1` na primeira vez para criar o Excel
+com Power Query. O `.ps1` cria as consultas via COM (`Workbook.Queries.Add`, uma
+por CSV, com `Table.TransformColumnTypes` por tipos detectados numa amostra do
+CSV e a pasta num parâmetro `PastaCSV`) e tenta carregá-las em tabelas
+(`Connections.Add2` + `ListObjects.Add`); se a carga falhar, as consultas ficam
+como "somente conexão". **Só roda com Excel 2016+ instalado e ativado** — na
+máquina de desenvolvimento a licença estava expirada e a automação foi recusada,
+então a geração automática precisa ser validada na máquina do usuário; o
+fallback documentado no LEIA-ME é criar as consultas pelo próprio Excel.
+Fazer a extração inteira em Power Query/M não é viável (OCR, ~60 regexes,
+cinco layouts).
 
 ### Hardcodes (aba 4)
 
@@ -256,8 +336,37 @@ O ponto sensível: re-concatenar faturas novas a uma planilha que o usuário já
   de "NOTA FISCAL Nº".
 - **`id_fatura` prefixado** propaga para TODAS as abas (itens, medição usam o
   mesmo `fid`). A busca do link usa `arquivo_pdf`/`numero_fatura`, não `id_fatura`.
+- **Mapa de UCs: um registro, VÁRIOS identificadores.** O índice é por dígitos
+  sobre todos os ids do registro (`id_uc` como lista ou `a; b`). Um cadastro em
+  que a UC nova, a formatada e a velha vêm em COLUNAS separadas (`UC`,
+  `id_uc`, `UC VELHA` — formato da planilha do TJGO) só casa as faturas
+  antigas se essas colunas forem marcadas como "outros identificadores" na
+  importação (`aplicar_mapeamento(..., ids_extras=[...])`); sem isso o mapa
+  cobria 46 % das faturas. Linha com a chave vazia/`-` mas com identificador
+  alternativo não é descartada (o alternativo vira o canônico). A coluna da
+  Resolução ANEEL 1095/2024 (15 dígitos com zeros) NÃO é identificador
+  alternativo: é o item `id_uc_aneel_bordero`.
+- **Cadastro incompleto é silencioso sem a aba `validacao`**: a planilha do
+  dicionário de 30/08/2026 tinha 103 UCs (subconjunto exato do JSON de 221 do
+  Drive) e deixava 54 % das faturas sem `id_uc_canonico`. A regra
+  `UC_FORA_DO_MAPA` existe para isso aparecer.
+- **PDFs direto do Google Drive (`J:`) custam ~1 s cada** (streaming) — 10,4 mil
+  faturas ≈ 4 h sequencial. Copiar o acervo para disco local (`robocopy /MT:16`,
+  ~11 min para 8,4 GB) e rodar o CLI em paralelo leva minutos.
 
 ### Casos de parsing conhecidos (Equatorial, `equatorial.py`)
+- **Texto EMBARALHADO do layout 2022** (tabela de medição e de itens lado a
+  lado): quando linhas das duas caem na mesma altura o pdfplumber intercala os
+  caracteres (`1 1 1 1 6 6 3 3 8 8 …`) e a linha de medição se perde
+  (2022038476622 saía com 9 das 16 linhas). `_montar_resultado` detecta a
+  assinatura (`_RE_TEXTO_EMBARALHADO`: 12+ tokens de 1 caractere) e reextrai a
+  medição só da **coluna da esquerda** da página (`extrair_texto_recortado`:
+  `page.crop` até o x do cabeçalho `Itens`), ficando com o que rendeu mais
+  linhas. Só em PDF de fatura única (`numero_forcado is None`). `dedupe_chars`
+  do pdfplumber NÃO resolve: com tolerância alta ele também come dígitos
+  repetidos legítimos (`997038` → `97038`).
+- **UC sem contrato de demanda** (`CONSUMO/DEMANDA S/ CONTRATO`): caixa
+  "Grandezas Contratadas" vazia ⇒ `demanda_contratada_kw = 0`, não nulo.
 - **Leitura Anterior opcional** na medição: linha com 1 só inteiro (célula vazia
   no PDF) não é perdida (`pat_a` com grupo opcional).
 - **Medidor COLADO na grandeza** (`12794856-2ENERGIA ATIVA - KWH ÚNICO …`): no
@@ -301,6 +410,18 @@ O ponto sensível: re-concatenar faturas novas a uma planilha que o usuário já
 - **SCEE `SALDO KWH`**: 3 formatos — número único; `ATV:`/`ATV=` (equivale ao
   total); por posto `P=.., FP=.., HR=..`. A captura usa **DOTALL** porque o bloco
   pode quebrar em duas linhas (HR embaixo).
+- **`data_emissao` com o rótulo quebrado**: `… SÉRIE 000 / DATA DE` numa linha
+  e `CPF/CNPJ: … EMISSÃO: 16/01/2025` na seguinte, com texto de outra coluna no
+  meio — em 193 das 203 faturas (texto ou OCR). O regex original exigia os dois
+  pedaços colados; hoje há dois fallbacks (`DATA DE[^\n]{0,60}\n[^\n]{0,80}?EMISSÃO:`
+  e `EMISSÃO:` solto) e, no Modelo 6, a 4ª data da linha `ANTERIOR ATUAL
+  PRÓXIMA EMISSÃO APRESENTAÇÃO`.
+- **Medição escaneada com zero lido como "o"** (`Demanda-kW Ponta o o 100 23`):
+  parte das linhas casa o padrão normal e o resto se perdia (24 faturas A4 com
+  3–5 das 9 linhas). `_medicao_ocr_tolerante` agora também roda como
+  **complemento** quando o layout atual rendeu linhas — acrescenta só as
+  (grandeza, posto) ausentes, nunca reescreve o que já foi lido; num PDF de
+  texto tudo já casou e nada muda.
 
 ---
 
@@ -317,7 +438,14 @@ O ponto sensível: re-concatenar faturas novas a uma planilha que o usuário já
 **Adicionar uma aba derivada** (como as resumidas): definir suas colunas em
 `schema.CANONICAL_COLUMNS`, incluí-la em `schema.SHEET_ORDER` e `DERIVED_SHEETS`,
 dar cor em `SHEET_COLORS`, definir dedup (`DEDUP_KEYS` ou `DEDUP_FULL_ROW`) e
-implementar a derivação em `dataset.Dataset.to_dataframes`.
+implementar a derivação em `dataset.Dataset.to_dataframes` — ou, se ela depende
+do lote inteiro/do mapa de UCs (como `tarifas` e `validacao`), em
+`derivados._calcular` + `derivados.ABAS_RECALCULADAS` (reinstalada inteira na
+concatenação).
+
+**Adicionar uma regra de validação:** um `add(i, gravidade, regra, detalhe)` no
+laço de `derivados._derivar_validacao` e a descrição em
+`glossario.REGRAS_VALIDACAO_DOC` (+ teste em `tests/test_ajustes_set2026.py`).
 
 **Adicionar uma distribuidora nova:** criar `core/<nova>.py` com
 `processar_pdf(path) -> {aba: linhas}` (mesmas abas base), registrar em
@@ -347,6 +475,12 @@ Setup via winget) → PyInstaller (`build/faturas.spec`) → `.zip` → instalad
 `resources/build_info.txt`). Saída: `dist/FaturasDeEnergia.zip` (~100 MB) e
 `dist/FaturasDeEnergia-Setup.exe` (~72 MB).
 
+O spec gera **dois executáveis** na mesma pasta (`COLLECT(exe, exe_cli, …)`):
+`FaturasDeEnergia.exe` (janela, `console=False`) e `FaturasDeEnergiaCLI.exe`
+(`console=True`, para o modo linha de comando mostrar progresso e erros). Os
+dois compartilham `_internal/`. `build.ps1` copia `ferramentas/*` (`processar.bat`,
+`gerar_powerquery.ps1`) e o `LEIA-ME.txt` para a raiz da pasta distribuída.
+
 **Validar o `.exe`:** rodar com `FATURAS_SELFCHECK=<arquivo>` no ambiente — o app
 grava um relatório (imports, OCR, glossário) e sai sem abrir a janela. Truque:
 a contagem de termos do glossário no relatório muda quando o código muda, então
@@ -356,8 +490,12 @@ serve para confirmar que o pacote tem a versão nova.
 
 ## 9. Testes
 
-- `tests/test_concat.py` — lógica de concatenação/remapeamento (sem PDFs).
-  Rodar: `PYTHONPATH=src .venv\Scripts\python.exe tests\test_concat.py`.
+- `tests/` — 130 testes sem PDFs (trechos reais de texto): concatenação,
+  hardcodes, medição (Equatorial/CHESP, recuperadas e truncadas), demanda
+  contratada, mapa de UCs, tarifas, borderôs, importação inteligente e
+  `test_ajustes_set2026.py` (demanda "S/ CONTRATO", mensagens, `data_emissao`
+  CHESP, OCR, aba `validacao`, chave/alternativos do mapa, CLI).
+  Rodar: `PYTHONPATH=src .venv\Scripts\python.exe -m pytest tests -q`.
 - **Conjunto rápido**: `testes_exec/conjunto_faturas/{eq,chesp}` (66 EQ) — cobre
   os formatos SCEE (plano, ATV, por posto) e casos de parsing. Usar para iterar
   rápido em vez das pastas grandes (`pdfs/energia_tjgo/equatorial/*`).

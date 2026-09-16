@@ -200,17 +200,28 @@ def test_chesp_ocr_troca_digitos_por_letras():
         "ENERGIA REATIVA - KWH", "ÚNICO", 0, 0, 1.0, 0.0, "1194809")
 
 
-def test_chesp_ocr_nao_roda_quando_a_leitura_normal_funcionou():
+def test_chesp_ocr_complementa_sem_mexer_no_que_a_leitura_normal_leu():
     """
-    O passe tolerante é ÚLTIMO recurso: se a fatura já rendeu medição pelo
-    caminho normal, ele não roda — nenhuma fatura que já era lida corretamente
-    passa a ter dígito "corrigido".
+    Quando a leitura normal já rendeu linhas, o passe tolerante só COMPLEMENTA:
+    acrescenta as (grandeza, posto) que faltaram (o OCR lê zero como "o" —
+    FATURA Nº 1830882 saía com 3 das 9 linhas) e nunca reescreve uma linha que
+    o caminho normal já leu.
     """
     txt = ("1194091 Energia Ativa-kWh Único 100 200 1 100\n"
            "1194091 Energia Reativa-kVArh Único o o 1 o\n")
     linhas = chesp.extrair_medicao_chesp(txt, "CHESP_1")
-    assert len(linhas) == 1              # a 2ª linha (com 'o') NÃO é recuperada
+    assert len(linhas) == 2
     assert linhas[0]["Leitura Atual"] == 200
+    assert _campos(linhas[1]) == ("ENERGIA REATIVA - KWH", "ÚNICO", 0, 0, 1.0, 0.0, "1194091")
+
+
+def test_chesp_ocr_complemento_nao_substitui_linha_ja_lida():
+    """A mesma (grandeza, posto) lida pelo caminho normal fica como está."""
+    txt = ("1194091 Energia Ativa-kWh Único 100 200 1 100\n"
+           "1194091 Energia Ativa-kWh Único lOO 2OO 1 1OO\n")
+    linhas = chesp.extrair_medicao_chesp(txt, "CHESP_1")
+    assert len(linhas) == 1
+    assert linhas[0]["Leitura Anterior"] == 100
 
 
 def test_chesp_ocr_descarta_token_que_nao_vira_numero():

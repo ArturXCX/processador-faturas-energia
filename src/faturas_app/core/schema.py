@@ -17,11 +17,11 @@ from __future__ import annotations
 BASE_SHEETS = ["fatura", "unidade_consumidora", "itens_fatura", "impostos", "medicao"]
 
 # Abas DERIVADAS (calculadas a partir das base em Dataset.to_dataframes).
-DERIVED_SHEETS = ["fatura_resumida", "medicao_resumida", "tarifas"]
+DERIVED_SHEETS = ["fatura_resumida", "medicao_resumida", "tarifas", "validacao"]
 
 # Ordem das abas na planilha de saída (resumidas posicionadas como pedido).
 SHEET_ORDER = ["fatura_resumida", "fatura", "unidade_consumidora", "itens_fatura",
-               "tarifas", "impostos", "medicao", "medicao_resumida"]
+               "tarifas", "impostos", "medicao", "medicao_resumida", "validacao"]
 
 # Cores (cabeçalho, linha alternada) — mesmas dos notebooks.
 SHEET_COLORS = {
@@ -33,6 +33,7 @@ SHEET_COLORS = {
     "medicao":      ("4A235A", "E8D5F5"),
     "fatura_resumida":   ("1F4E79", "BDD7EE"),
     "medicao_resumida":  ("4A235A", "E8D5F5"),
+    "validacao":    ("9C0006", "FFC7CE"),
     "glossario":    ("0E6E63", "D6EFEC"),
 }
 
@@ -78,6 +79,8 @@ CANONICAL_COLUMNS = {
         "data_leitura_atual",
         "numero_dias_leitura",
         "data_proxima_leitura",
+        "mensagens_importantes",
+        "extraido_por_ocr",
     ],
     # Três blocos, nesta ordem: identidade extraída do PDF (razao_social..uf),
     # cadastro vindo do dicionário oficial de UCs (core/dicionario_uc.py) e os
@@ -160,6 +163,7 @@ CANONICAL_COLUMNS = {
         "scee_saldo_kwh_FP",
         "scee_saldo_kwh_HR",
         "numero_dias_leitura",
+        "mensagens_importantes",
     ],
     "medicao_resumida": [
         "id_fatura",
@@ -186,6 +190,20 @@ CANONICAL_COLUMNS = {
         "tarifa_unitaria_r$",
         "item_normalizado",
     ],
+    # Relatório de VALIDAÇÃO do lote (1 linha por ocorrência): cruzamentos que
+    # a fatura sozinha não permite conferir — demanda contratada × grupo de
+    # fornecimento do mapa de UCs, UC fora do mapa, soma de itens × total,
+    # medição vazia/incompleta, fatura lida por OCR. Ver derivados._derivar_validacao.
+    "validacao": [
+        "id_fatura",
+        "id_uc",
+        "id_uc_canonico",
+        "competencia",
+        "fornecedor",
+        "gravidade",
+        "regra",
+        "detalhe",
+    ],
 }
 
 # Grandeza filtrada na aba medicao_resumida e o novo nome da coluna de consumo.
@@ -206,7 +224,8 @@ _EXTRAS_ID_UC_UC = ["id_uc_sem_format", "id_uc_atual_medidor",
                     "id_uc_atual_medidor_sem_format", "id_uc_canonico"]
 _EXTRAS_ID_UC_OUTRAS = ["id_uc_atual", "id_uc_canonico"]
 for _aba, _cols in CANONICAL_COLUMNS.items():
-    if "id_uc" not in _cols:
+    # 'validacao' já declara id_uc_canonico à mão e não leva id_uc_atual.
+    if "id_uc" not in _cols or _aba == "validacao":
         continue
     _idx = _cols.index("id_uc")
     _extras = _EXTRAS_ID_UC_UC if _aba == "unidade_consumidora" else _EXTRAS_ID_UC_OUTRAS
@@ -240,6 +259,8 @@ COLS_PROTEGIDAS = {
     "scee_saldo_kwh_FP",
     "scee_saldo_kwh_HR",
     "energia_geracao_kwh",
+    "mensagens_importantes",
+    "extraido_por_ocr",
     # Cadastro vindo do mapa de UCs: protegidas para o formato da aba ficar
     # estável entre lotes (num lote pequeno uma delas pode sair 100% vazia).
     "id_uc_aneel_bordero",

@@ -85,8 +85,29 @@ exe = EXE(
         os.path.join(ROOT, "build", "app.ico")) else None,
 )
 
+# Segundo executável, COM console, para o modo linha de comando
+# (`FaturasDeEnergiaCLI.exe --cli …`): o exe de janela não tem stdout, então
+# o progresso e os erros do lote não apareceriam. Os dois compartilham a
+# mesma pasta _internal (mesmo pacote, mesmos recursos).
+exe_cli = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="FaturasDeEnergiaCLI",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=True,
+    disable_windowed_traceback=False,
+    icon=os.path.join(ROOT, "build", "app.ico") if os.path.exists(
+        os.path.join(ROOT, "build", "app.ico")) else None,
+)
+
 coll = COLLECT(
     exe,
+    exe_cli,
     a.binaries,
     a.datas,
     strip=False,

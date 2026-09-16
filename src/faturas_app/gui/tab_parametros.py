@@ -271,10 +271,12 @@ class AbaParametros(ctk.CTkFrame):
             return
         try:
             registros, extras = dicionario_uc.aplicar_mapeamento(
-                analise, dlg.resultado["mapeamento"], dlg.resultado["extras"])
+                analise, dlg.resultado["mapeamento"], dlg.resultado["extras"],
+                chave=dlg.resultado.get("chave"),
+                ids_extras=dlg.resultado.get("ids_extras"))
             if not registros:
-                messagebox.showwarning("Atenção", "Nenhum registro com 'id_uc' "
-                                                  "preenchido — nada foi importado.")
+                messagebox.showwarning("Atenção", "Nenhum registro com identificador "
+                                                  "de UC preenchido — nada foi importado.")
                 return
             m = dicionario_uc.salvar_mapa(registros, extras)
             dicionario_uc.definir_usar_medidor(dlg.resultado["usar_medidor"])

@@ -23,6 +23,7 @@ planilha é montada na memória do navegador. Não há servidor.
 | Faturas CHESP **escaneadas** | Precisam de OCR (Tesseract, binário nativo). Sem build WebAssembly. São detectadas e reportadas, não processadas. |
 | **Borderôs** | `core/borderos.py` lê por coordenadas com PyMuPDF, que não tem build WebAssembly. |
 | Interface do desktop | CustomTkinter/Tkinter não roda no navegador — a interface web é própria (`index.html` + `app.js`). |
+| Modo linha de comando / `processar.bat` / Power Query | São do pacote desktop (`cli.py` usa pool de processos e disco). O núcleo — inclusive as abas `tarifas` e `validacao` e a coluna `mensagens_importantes` — é o mesmo. |
 
 Faturas CHESP **com texto** funcionam normalmente; só as escaneadas (~22% do
 acervo do TJGO) dependem de OCR.

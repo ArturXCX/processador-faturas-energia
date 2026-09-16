@@ -81,7 +81,8 @@ TOL_TOTAL = 1.0
 # Utilidades de baixo nível
 # --------------------------------------------------------------------------- #
 _MONEY = re.compile(r"^-?\d{1,3}(?:\.\d{3})*,\d{1,2}$|^-?\d+,\d{1,2}$")
-_INT = re.compile(r"^\d{5,15}$")
+# UC pode terminar com o dígito verificador "X" (ENEL/CELG com retenções: 001008146X)
+_INT = re.compile(r"^\d{4,14}[\dX]$")
 _CODIGO = re.compile(r"^[A-Z0-9][A-Z0-9\-]{0,11}$")  # PEFP, AB1234, 54, 53-COMP
 
 
@@ -346,6 +347,27 @@ def _competencia_iso(mm, aaaa) -> str:
     return f"{int(aaaa):04d}-{int(mm):02d}"
 
 
+_RE_NOME_REF = re.compile(r"\bREF\.?[\s\-_.]*(\d{1,2})[\s\-_./]+((?:19|20)\d{2})\b", re.IGNORECASE)
+_RE_NOME_MM_AAAA = re.compile(r"(?<![\d.])(0[1-9]|1[0-2])[\s\-_.](20\d{2})(?!\d)")
+_RE_NOME_MM_AA = re.compile(r"(?<![\d.])(0[1-9]|1[0-2])\.(\d{2})(?:\.pdf)?$", re.IGNORECASE)
+
+
+def _competencia_do_nome(nome: str) -> str:
+    """Competência pelos padrões de nome dos acervos (UFG/Polícia Penal): 'Borderô 0012000 ref-05 2026.pdf',
+    'BORDERÔ 0061101 REF 10-2022.pdf', 'Borderô 63222 01.24.pdf', '12000 02.2022.pdf', '06 2023.pdf'."""
+    base = os.path.splitext(nome)[0]
+    m = _RE_NOME_REF.search(base)
+    if m and 1 <= int(m.group(1)) <= 12:
+        return _competencia_iso(m.group(1), m.group(2))
+    m = _RE_NOME_MM_AA.search(base + ".pdf")
+    if m:
+        return _competencia_iso(m.group(1), "20" + m.group(2))
+    m = _RE_NOME_MM_AAAA.search(base)
+    if m:
+        return _competencia_iso(m.group(1), m.group(2))
+    return ""
+
+
 def _identidade(doc, full: str, nome: str) -> dict:
     """
     Número, código de agrupamento, competência e vencimento — do CONTEÚDO,
@@ -424,6 +446,8 @@ def _identidade(doc, full: str, nome: str) -> dict:
             mc = _RE_COMPETENCIA.search(nome)
             if mc:
                 competencia = _competencia_iso(mc.group(1), mc.group(2) + mc.group(3))
+    if not competencia:
+        competencia = _competencia_do_nome(nome)
     if not vencimento:
         mv = re.search(r"VENC\.?\s*(\d{2})\.(\d{2})\.(\d{2,4})", nome, re.IGNORECASE)
         if mv:
@@ -455,6 +479,73 @@ def _montar_id(distribuidora: str, numero: str, competencia: str) -> str:
 # --------------------------------------------------------------------------- #
 # API pública
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# OCR das páginas digitalizadas (Tesseract, mesmo motor das faturas)
+# --------------------------------------------------------------------------- #
+OCR_DPI = 300
+_MIN_TEXTO_PAGINA = 80
+
+
+def _ocr_palavras(page, dpi: int = OCR_DPI):
+    """Palavras da página por OCR, no MESMO formato de page.get_text('words'): (x0, y0, x1, y1, texto, bloco,
+    linha, palavra), em pontos do PDF — assim os extratores posicionais servem sem mudança."""
+    import pytesseract
+    from PIL import Image
+    pix = page.get_pixmap(dpi=dpi)
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    d = pytesseract.image_to_data(img, lang="por", config="--psm 6", output_type=pytesseract.Output.DICT)
+    k = 72.0 / dpi
+    palavras = []
+    for i, txt in enumerate(d["text"]):
+        txt = (txt or "").strip()
+        if not txt or float(d["conf"][i]) < 0:
+            continue
+        x, y, w, h = d["left"][i], d["top"][i], d["width"][i], d["height"][i]
+        palavras.append((x * k, y * k, (x + w) * k, (y + h) * k, txt, d["block_num"][i], d["line_num"][i], d["word_num"][i]))
+    return palavras
+
+
+class _PaginaOCR:
+    """Página que responde get_text() com o texto do PDF quando há texto, ou com OCR quando é imagem."""
+
+    def __init__(self, page):
+        self._page = page
+        self._palavras = None
+        self.ocr = len((page.get_text() or "").strip()) < _MIN_TEXTO_PAGINA
+
+    def get_text(self, tipo: str = "text"):
+        if not self.ocr:
+            return self._page.get_text(tipo)
+        if self._palavras is None:
+            self._palavras = _ocr_palavras(self._page)
+        if tipo == "words":
+            return self._palavras
+        linhas = (" ".join(w[4] for w in sorted(linha, key=lambda t: t[0]))
+                  for linha in _clusterizar_linhas(self._palavras))
+        return "\n".join(linhas) + "\n"
+
+
+class _DocOCR:
+    def __init__(self, doc):
+        self._paginas = [_PaginaOCR(doc[i]) for i in range(doc.page_count)]
+        self.page_count = doc.page_count
+
+    def __getitem__(self, i):
+        return self._paginas[i]
+
+    @property
+    def usou_ocr(self) -> bool:
+        return any(p.ocr for p in self._paginas)
+
+
+def _ocr_disponivel() -> bool:
+    try:
+        from . import ocr
+        return ocr.configurar_ocr()
+    except Exception:
+        return False
+
+
 @dataclass
 class ResultadoBordero:
     bordero: dict
@@ -466,6 +557,13 @@ def processar_pdf(path: str) -> ResultadoBordero:
     """Processa um PDF de borderô e devolve o registro-cabeçalho + detalhes."""
     nome = os.path.basename(path)
     doc = fitz.open(path)
+    usou_ocr = False
+    texto_detalhe = sum(len(doc[i].get_text().strip()) for i in range(1, doc.page_count))
+    texto_p1 = len(doc[0].get_text().strip()) if doc.page_count else 0
+    if (texto_detalhe < 300 or texto_p1 < _MIN_TEXTO_PAGINA) and _ocr_disponivel():
+        # borderô digitalizado (todo ou só o detalhe): lê as páginas-imagem por OCR
+        doc = _DocOCR(doc)
+        usou_ocr = doc.usou_ocr
     full = _texto_completo(doc)
     distribuidora = _distribuidora(full, nome)
     ident = _identidade(doc, full, nome)
@@ -479,9 +577,10 @@ def processar_pdf(path: str) -> ResultadoBordero:
     bruto, retencoes = _anchor_bruto_retencoes(full)
     cod_agr = ident["cod_agrupamento"] or _cod_agrupamento(full)
 
-    # Detalhe por UC só é confiável se as páginas têm texto (não são escaneadas).
-    texto_detalhe = sum(len(doc[i].get_text().strip()) for i in range(1, doc.page_count))
-    escaneado = texto_detalhe < 300
+    # Detalhe por UC só é confiável se as páginas têm texto (ou foram lidas por OCR).
+    if not usou_ocr:
+        texto_detalhe = sum(len(doc[i].get_text().strip()) for i in range(1, doc.page_count))
+    escaneado = texto_detalhe < 300 and not usou_ocr
 
     unidades = []
     resumo = []
@@ -494,14 +593,19 @@ def processar_pdf(path: str) -> ResultadoBordero:
 
     soma = round(sum(u["valor"] for u in unidades if u.get("valor") is not None), 2)
     bate = (total is not None) and (abs(soma - total) < TOL_TOTAL)
+    # OCR que não acha nenhuma UC (ex.: o PDF só traz as páginas de cabeçalho) é detalhe não extraído,
+    # não soma que não bate.
+    sem_detalhe = escaneado or (usou_ocr and not unidades)
 
     obs = []
-    if escaneado:
+    if usou_ocr:
+        obs.append("PDF digitalizado: lido por OCR (conferir valores).")
+    if sem_detalhe:
         obs.append("Páginas de detalhe digitalizadas (imagem): UCs não extraídas.")
     elif not bate:
         obs.append(f"Soma das UCs ({_fmt_valor(soma)}) não bate com o total "
                    f"({_fmt_valor(total)}).")
-    if contas is not None and not escaneado and len(unidades) != contas:
+    if contas is not None and not sem_detalhe and len(unidades) != contas:
         obs.append(f"Contagem extraída ({len(unidades)}) difere do informado ({contas}).")
 
     bordero = {
@@ -518,9 +622,11 @@ def processar_pdf(path: str) -> ResultadoBordero:
         "valor_total_bruto": bruto,
         "valor_total_retencoes": retencoes,
         "soma_valores_extraidos": soma,
-        "bate_total": "SIM" if bate else ("N/A" if escaneado else "NÃO"),
-        "escaneado": "SIM" if escaneado else "NÃO",
+        "bate_total": "SIM" if bate else ("N/A" if sem_detalhe else "NÃO"),
+        "escaneado": "SIM" if (escaneado or usou_ocr) else "NÃO",
         "observacao": " ".join(obs),
+        # fora de BORDERO_COLS (não vira coluna da planilha do app); usado pela carga do banco
+        "extraido_por_ocr": usou_ocr,
     }
 
     # Carimba id/competência/distribuidora nas linhas de detalhe.

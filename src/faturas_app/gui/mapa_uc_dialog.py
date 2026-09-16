@@ -73,21 +73,54 @@ class DialogoMapaUC(ctk.CTkToplevel):
         ctk.CTkLabel(corpo, text=f"{dicionario_uc.ITEM_CHAVE}  (chave)",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(
             row=linha, column=0, sticky="w", padx=8, pady=3)
-        ctk.CTkLabel(corpo, text=analise["chave"], anchor="w",
-                     text_color=("gray35", "gray70")).grid(
-            row=linha, column=1, sticky="ew", padx=8)
+        # A chave pode ser escolhida quando o arquivo não tem 'id_uc' com esse
+        # nome (ex.: dicionário com colunas 'UC' / 'UC VELHA').
+        self.combo_chave = ctk.CTkComboBox(corpo, values=list(analise["campos"]), width=280)
+        self.combo_chave.set(analise["chave"])
+        self.combo_chave.grid(row=linha, column=1, sticky="w", padx=8)
+        ctk.CTkLabel(corpo, wraplength=300, justify="left", anchor="w",
+                     font=ctk.CTkFont(size=11), text_color=("gray45", "gray60"),
+                     text="Identificador principal da UC (vira o id_uc_canonico)."
+                          + ("" if analise.get("chave_exata", True)
+                             else " O arquivo não tem 'id_uc'; escolhido por parecer "
+                                  "um identificador — confira.")).grid(
+            row=linha, column=2, sticky="w", padx=8)
         linha += 1
 
+        # Outros campos com identificadores da MESMA UC (formato antigo, com
+        # pontuação…): entram no id_uc do registro para a fatura casar em
+        # qualquer formato.
+        self._ids_extras: dict[str, ctk.BooleanVar] = {}
+        candidatos = [c for c in analise.get("candidatos_chave", []) if c != analise["chave"]]
+        if candidatos:
+            ctk.CTkLabel(corpo, text="outros identificadores\nda mesma UC",
+                         justify="left").grid(row=linha, column=0, sticky="nw", padx=8, pady=3)
+            caixa = ctk.CTkFrame(corpo, fg_color="transparent")
+            caixa.grid(row=linha, column=1, sticky="w", padx=8)
+            for c in candidatos:
+                var = ctk.BooleanVar(value=c in analise.get("ids_extras_sugeridos", []))
+                ctk.CTkCheckBox(caixa, text=c, variable=var).pack(anchor="w", pady=1)
+                self._ids_extras[c] = var
+            ctk.CTkLabel(corpo, wraplength=300, justify="left", anchor="w",
+                         font=ctk.CTkFont(size=11), text_color=("gray45", "gray60"),
+                         text="Marcados: a fatura casa por qualquer um deles "
+                              "(ex.: 'UC VELHA' para as faturas antigas). Linha sem a "
+                              "chave mas com um destes não é descartada.").grid(
+                row=linha, column=2, sticky="w", padx=8)
+            linha += 1
+
+        sugeridos = analise.get("sugeridos") or {}
         for item, coluna, tipo, descricao in dicionario_uc.TEMPLATE:
             if item == dicionario_uc.ITEM_CHAVE:
                 continue
             ctk.CTkLabel(corpo, text=item).grid(row=linha, column=0, sticky="w",
                                                 padx=8, pady=3)
             combo = ctk.CTkComboBox(corpo, values=opcoes, width=280)
-            combo.set(analise["auto"].get(item, NAO_USAR))
+            combo.set(analise["auto"].get(item) or sugeridos.get(item) or NAO_USAR)
             combo.grid(row=linha, column=1, sticky="w", padx=8)
             self._combos[item] = combo
-            ctk.CTkLabel(corpo, text=descricao, wraplength=300, justify="left",
+            ctk.CTkLabel(corpo, text=descricao + (" (sugerido pelo nome)" if item in sugeridos else ""),
+                         wraplength=300, justify="left",
                          anchor="w", font=ctk.CTkFont(size=11),
                          text_color=("gray45", "gray60")).grid(
                 row=linha, column=2, sticky="w", padx=8)
@@ -158,6 +191,9 @@ class DialogoMapaUC(ctk.CTkToplevel):
         self._atualizar_previa()
         for c in self._combos.values():
             c.configure(command=lambda _v: self._atualizar_previa())
+        self.combo_chave.configure(command=lambda _v: self._atualizar_previa())
+        for var in self._ids_extras.values():
+            var.trace_add("write", lambda *_a: self._atualizar_previa())
         for var, _e in self._extras.values():
             var.trace_add("write", lambda *_a: self._atualizar_previa())
 
@@ -168,16 +204,21 @@ class DialogoMapaUC(ctk.CTkToplevel):
     def _coletar(self):
         mapeamento = {item: (c.get() if c.get() != NAO_USAR else None)
                       for item, c in self._combos.items()}
+        chave = self.combo_chave.get()
+        ids_extras = [c for c, var in self._ids_extras.items() if var.get() and c != chave]
         extras = {campo: entry.get().strip()
                   for campo, (var, entry) in self._extras.items()
-                  if var.get() and entry.get().strip()}
-        return mapeamento, extras
+                  if var.get() and entry.get().strip()
+                  and campo != chave and campo not in ids_extras}
+        return mapeamento, extras, chave, ids_extras
 
     def _atualizar_previa(self):
-        mapeamento, extras = self._coletar()
+        mapeamento, extras, chave, ids_extras = self._coletar()
         n_itens = sum(1 for v in mapeamento.values() if v)
         fora = [i for i, v in mapeamento.items() if not v]
-        texto = f"{n_itens} coluna(s) do template + {len(extras)} extra(s)."
+        texto = (f"chave: {chave}"
+                 + (f" (+{len(ids_extras)} identificador(es) alternativo(s))" if ids_extras else "")
+                 + f" · {n_itens} coluna(s) do template + {len(extras)} extra(s).")
         if fora:
             texto += f"  Ficam de fora: {', '.join(fora[:3])}"
             if len(fora) > 3:
@@ -185,9 +226,11 @@ class DialogoMapaUC(ctk.CTkToplevel):
         self.lbl_previa.configure(text=texto)
 
     def _confirmar(self):
-        mapeamento, extras = self._coletar()
+        mapeamento, extras, chave, ids_extras = self._coletar()
         self.resultado = {"mapeamento": {k: v for k, v in mapeamento.items() if v},
                           "extras": extras,
+                          "chave": chave,
+                          "ids_extras": ids_extras,
                           "usar_medidor": bool(self.var_medidor.get())}
         self.grab_release()
         self.destroy()

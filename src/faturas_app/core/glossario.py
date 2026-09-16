@@ -50,6 +50,10 @@ ABAS_DOC = [
     ("medicao_resumida", "Versão da aba 'medicao' filtrada só na grandeza "
                          "'ENERGIA GERAÇÃO - KWH', com 'Consumo kWh' renomeado para "
                          "'energia_geracao_kwh'."),
+    ("validacao", "Relatório de validação do lote: uma linha por ocorrência "
+                  "(gravidade erro/aviso/info) cruzando a fatura com o mapa de UCs, "
+                  "a soma dos itens e a medição. Recalculada a cada processamento; "
+                  "ver as regras na categoria 'Regra de validação'."),
     ("glossario", "Esta aba: significado das colunas, valores e itens da fatura."),
 ]
 
@@ -106,6 +110,17 @@ COLUNAS_DOC = [
     ("fatura", "data_leitura_atual", "Data da leitura atual do medidor."),
     ("fatura", "numero_dias_leitura", "Número de dias faturados entre as duas leituras."),
     ("fatura", "data_proxima_leitura", "Data prevista para a próxima leitura."),
+    ("fatura / fatura_resumida", "mensagens_importantes", "Texto da caixa de mensagens da "
+               "fatura ('MENSAGENS IMPORTANTES' / 'INFORMAÇÕES PARA O CLIENTE' na Equatorial; "
+               "bandeira tarifária e avisos na CHESP): VRC, avisos da ANEEL, movimentação de "
+               "equipamento, créditos do SCEE, parcelamentos etc."),
+    ("fatura", "extraido_por_ocr", "TRUE quando o PDF é escaneado e os dados vieram de OCR "
+               "(Tesseract) — valores podem ter ruído de leitura; ver aba 'validacao'."),
+    # validacao
+    ("validacao", "gravidade", "erro (dado provavelmente errado/faltando), aviso (vale conferir) "
+                  "ou info (contexto útil, não é problema)."),
+    ("validacao", "regra", "Código da regra que gerou a linha; ver categoria 'Regra de validação'."),
+    ("validacao", "detalhe", "Explicação da ocorrência com os valores envolvidos."),
     # unidade_consumidora
     ("unidade_consumidora", "id_uc", "Código da Unidade Consumidora (UC)."),
     ("unidade_consumidora", "razao_social", "Razão social / nome do titular da UC."),
@@ -222,6 +237,30 @@ VALORES_DOC = [
     ("Competência (AAAA-MM)", "Ano e mês de referência do consumo, ex.: 2025-08 = agosto/2025."),
 ]
 
+# Regras da aba 'validacao' (core/derivados._derivar_validacao).
+REGRAS_VALIDACAO_DOC = [
+    ("DEMANDA_AUSENTE_UC_AT", "erro: o mapa de UCs classifica a UC como AT (grupo A) mas a "
+        "fatura saiu sem demanda contratada — toda UC AT tem demanda (0 ou mais)."),
+    ("DEMANDA_AUSENTE_GRUPO_A", "erro: a classificação da própria fatura é do grupo A e a "
+        "demanda contratada ficou vazia (sem informação do mapa para a UC)."),
+    ("ITENS_NAO_FECHAM", "erro: a soma de 'valor_r$' dos itens difere do 'valor_total_r$' em "
+        "mais de R$ 1 — algum item não foi lido ou foi lido errado."),
+    ("SEM_ID_UC", "erro: a fatura não trouxe UC legível (id_uc = NULO_<id_fatura>)."),
+    ("GRUPO_DIVERGENTE_MAPA", "aviso: grupo tarifário da fatura (A/B) diferente do grupo de "
+        "fornecimento do mapa de UCs (AT/BT) — cadastro desatualizado ou UC trocada."),
+    ("DEMANDA_EM_UC_BT", "aviso: demanda contratada maior que zero numa UC/fatura do grupo B "
+        "(baixa tensão não tem contrato de demanda)."),
+    ("UC_FORA_DO_MAPA", "aviso (1 linha por UC): há mapa de UCs carregado mas a UC não está "
+        "cadastrada — sem id_uc_canonico e sem dados do cadastro."),
+    ("MEDICAO_VAZIA", "aviso: nenhuma linha de medição extraída da fatura."),
+    ("MEDICAO_INCOMPLETA", "aviso: fatura do grupo A com menos de 9 linhas de medição "
+        "(o layout traz 9 a 16) — parte da tabela não foi lida."),
+    ("DEMANDA_SEM_CONTRATO", "info: demanda contratada = 0 porque os itens vieram como "
+        "'CONSUMO/DEMANDA S/ CONTRATO' (UC sem contrato de demanda no mês)."),
+    ("LIDA_POR_OCR", "info: PDF escaneado, lido por OCR — valores podem ter ruído; conferir "
+        "com o PDF quando algo parecer estranho."),
+]
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 4. CONCEITOS gerais (glossário oficial Equatorial)
@@ -296,6 +335,8 @@ def construir_glossario_df() -> pd.DataFrame:
         rows.append((col, f"Coluna · {aba}", defin))
     for termo, defin in VALORES_DOC:
         rows.append((termo, "Valor / categoria", defin))
+    for termo, defin in REGRAS_VALIDACAO_DOC:
+        rows.append((termo, "Regra de validação", defin))
     for termo, defin in CONCEITOS:
         rows.append((termo, "Conceito geral", defin))
     for it in _carregar_itens():

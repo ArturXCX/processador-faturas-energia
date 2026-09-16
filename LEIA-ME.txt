@@ -50,9 +50,11 @@ item_normalizado). Na aba "itens_fatura" da planilha, a coluna "item_normalizado
 usa essa tabela; itens fora da tabela ficam iguais ao próprio "item". A tabela
 fica salva no aplicativo.
 
-A planilha também traz duas abas-resumo:
+A planilha também traz abas-resumo e de conferência:
   - "fatura_resumida" (primeira aba): principais campos de cada fatura.
   - "medicao_resumida": só as linhas de "ENERGIA GERAÇÃO - KWH" da medição.
+  - "tarifas": linha do tempo das tarifas (1ª competência de cada item+tarifa).
+  - "validacao": conferência automática do lote (veja a seção mais abaixo).
 Na aba "fatura", a coluna "id_fatura" leva o prefixo da fornecedora
 (ex.: EQUATORIAL_10001867464) e há a coluna "numero_fatura" com o número original.
 
@@ -82,6 +84,94 @@ FATURAS ESCANEADAS (CHESP)
 Algumas faturas da CHESP são imagens (escaneadas). O app já vem com o leitor de
 texto por imagem (OCR) embutido — não é preciso instalar nada. No canto superior
 direito, o indicador deve mostrar "● OCR pronto".
+Na planilha, a coluna "extraido_por_ocr" (aba fatura) fica TRUE nessas faturas
+e a aba "validacao" lista cada uma (regra LIDA_POR_OCR): os valores lidos de
+imagem podem ter ruído — na dúvida, confira com o PDF.
+
+
+ABA "validacao" (conferência automática do lote)
+------------------------------------------------
+Toda planilha gerada traz a aba "validacao": uma linha por ocorrência, com a
+coluna "gravidade" (erro / aviso / info), a "regra" e um "detalhe" explicando.
+Principais regras:
+  - DEMANDA_AUSENTE_UC_AT / DEMANDA_AUSENTE_GRUPO_A: fatura de alta tensão
+    (grupo A) que saiu sem demanda contratada — toda UC AT tem demanda (0 ou mais).
+  - GRUPO_DIVERGENTE_MAPA: a fatura diz grupo A/B mas o mapa de UCs diz o
+    contrário (AT/BT) — cadastro desatualizado ou UC trocada.
+  - UC_FORA_DO_MAPA: UC que não está no mapa de UCs importado (1 linha por UC).
+  - ITENS_NAO_FECHAM: soma dos itens diferente do total da fatura (> R$ 1).
+  - MEDICAO_VAZIA / MEDICAO_INCOMPLETA: tabela de medição não lida ou pela metade.
+  - DEMANDA_SEM_CONTRATO (info): a UC estava sem contrato de demanda naquele mês
+    (itens "S/ CONTRATO"); a demanda contratada é gravada como 0.
+  - LIDA_POR_OCR (info): fatura escaneada.
+O significado de cada regra também está na aba "glossario".
+
+
+COLUNA "mensagens_importantes"
+------------------------------
+Nas abas fatura e fatura_resumida, o texto da caixa de mensagens da fatura
+("MENSAGENS IMPORTANTES" / "INFORMAÇÕES PARA O CLIENTE" na Equatorial; bandeira
+tarifária e avisos na CHESP): VRC, avisos da ANEEL, movimentação de equipamento,
+créditos do SCEE, parcelamentos etc. Fica vazia quando a caixa está em branco.
+
+
+MAPA DE UNIDADES CONSUMIDORAS (aba Parâmetros)
+----------------------------------------------
+Importe o cadastro de UCs (JSON ou planilha) em Parâmetros > "Importar mapa de
+UCs". Na tela de mapeamento:
+  - "id_uc (chave)": a coluna com o identificador principal da UC — se o arquivo
+    não tiver uma coluna chamada id_uc, escolha aqui (ex.: "UC").
+  - "outros identificadores da mesma UC": marque as colunas com o mesmo
+    identificador em outro formato (ex.: "UC VELHA", "UC FORMATADO"). Assim as
+    faturas antigas, que trazem o número velho, também casam com o cadastro e
+    recebem o mesmo id_uc_canonico. Linha sem a chave mas com um desses NÃO é
+    descartada.
+  - Campos fora do modelo (ex.: "FORNECIMENTO (GRUPO AT/BT)", "COMARCA") podem
+    virar colunas da aba unidade_consumidora — marque os que quiser. A coluna de
+    fornecimento AT/BT é usada pela aba "validacao" para conferir a demanda.
+Importante: um cadastro incompleto deixa faturas sem id_uc_canonico (aparecem
+como UC_FORA_DO_MAPA na validação). Prefira o cadastro completo.
+
+
+MODO LINHA DE COMANDO (processar.bat) — rotina sem abrir o programa
+-------------------------------------------------------------------
+Na pasta do aplicativo há o "processar.bat". Ele lê uma pasta de PDFs, gera a
+planilha e um CSV por aba, e guarda um cache por PDF: na próxima vez só os PDFs
+NOVOS são lidos (os demais vêm do cache). Serve para a rotina mensal: jogar os
+PDFs novos na pasta, dar dois cliques e abrir o Excel.
+
+Preparação (uma vez):
+  1. Ao lado da pasta "FaturasDeEnergia", crie a pasta "pdfs" com as subpastas
+     "equatorial" e "chesp" (cada uma com os PDFs da sua distribuidora; pode
+     haver subpastas por ano dentro delas).
+  2. Se quiser o mapa de UCs, importe-o uma vez pelo programa (aba Parâmetros)
+     — o modo linha de comando usa o mesmo cadastro.
+Uso:
+  - Dois cliques em processar.bat  →  gera "..\saida\faturas_energia.xlsx",
+    "..\saida\csv\*.csv", o cache em "..\saida\cache_faturas" e o log.
+  - Outras pastas:  processar.bat "C:\meus\pdfs" "C:\minha\saida"
+  - Opções avançadas (prompt de comando):
+      FaturasDeEnergiaCLI.exe --cli --pasta "C:\pdfs\equatorial=EQUATORIAL"
+          --pasta "C:\pdfs\chesp=CHESP" --saida "C:\saida\faturas.xlsx"
+          --csv "C:\saida\csv" --paralelo 6 --mapa-uc "C:\cadastro\ucs.json"
+      (--mapa-uc importa o cadastro na hora, sem perguntas; --paralelo N usa N
+      processos ao mesmo tempo; --cache - desliga o cache; --help lista tudo.)
+
+
+EXCEL COM POWER QUERY (atualiza sozinho a partir dos CSVs)
+----------------------------------------------------------
+Na primeira execução, o processar.bat também cria "..\saida\Faturas_PowerQuery.xlsx"
+(precisa do Excel 2016 ou mais novo instalado e ativado). Esse arquivo tem uma
+consulta do Power Query por aba, apontando para a pasta de CSVs. Depois de rodar
+o processar.bat de novo, abra-o e clique em Dados > Atualizar tudo: as tabelas se
+refazem com as faturas novas — sem abrir o programa.
+  - Se a pasta dos CSVs mudar de lugar: Dados > Consultas e Conexões > PastaCSV.
+  - Para gerar o arquivo manualmente (ou de novo):
+      powershell -ExecutionPolicy Bypass -File gerar_powerquery.ps1
+          -PastaCsv "C:\saida\csv" -Saida "C:\saida\Faturas_PowerQuery.xlsx"
+  - Sem Excel ativado na máquina, o script não roda; nesse caso crie as consultas
+    pelo próprio Excel (Dados > Obter Dados > De Arquivo > Texto/CSV, um por
+    aba, com delimitador ";").
 
 
 DICAS / PROBLEMAS COMUNS
