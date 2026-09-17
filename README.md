@@ -1,11 +1,21 @@
-# Processador de Faturas de Energia (Equatorial / CHESP)
+# Processador de Faturas de Energia e Água (Equatorial / CHESP / Saneago e concessionárias municipais)
 
-Aplicativo desktop (Windows) que converte PDFs de faturas de energia em uma
-planilha Excel estruturada (`fatura`, `unidade_consumidora`, `itens_fatura`,
-`tarifas`, `impostos`, `medicao`, as abas resumidas e o `glossario`), permite
-editar/renomear colunas e abas, e concatenar novas faturas a uma planilha já
-existente. Distribuído como executável — o usuário final **não precisa de
-Python instalado**.
+Aplicativo desktop (Windows) que converte PDFs de faturas de **energia**
+(Equatorial, CHESP e borderôs) e de **água** (Saneago — borderô e fatura
+analítica —, SAE Catalão, DEMAE Caldas Novas e Panamá, SAAEs de Abadiânia,
+Corumbá, Leopoldo de Bulhões e Mineiros, SANESC, São Simão Saneamento
+Ambiental, Águas de Ipameri, Buriti Alegre Ambiental, CODEGO) em planilhas
+Excel estruturadas, permite editar/renomear colunas e abas, e concatenar novas
+faturas a uma planilha já existente. Distribuído como executável — o usuário
+final **não precisa de Python instalado**.
+
+> **v4.0 (16/09/2026)** — novo domínio **Água**: todas as concessionárias no
+> **mesmo modelo de planilha** (`fatura_agua`, `itens_agua`, `historico_agua`,
+> `borderos_agua`, `contas_bordero_agua`, `validacao_agua`, `mapa_contas_agua`),
+> mapa de contas, validação e cruzamento borderô × analítica da Saneago; e
+> **atualização obrigatória**: o app avisa (e bloqueia) quando há versão mais
+> nova publicada nas Releases, mas continua funcionando sem internet.
+> Manual com capturas de tela: [docs/MANUAL_DE_USO.md](docs/MANUAL_DE_USO.md).
 
 ## 📥 Download
 
@@ -41,12 +51,61 @@ opções: pastas, paralelismo, cache, importação do mapa de UCs).
 
 ---
 
+## Água (v4.0) — todas as concessionárias no mesmo modelo
+
+A aba **Água** processa pastas com PDFs de qualquer concessionária: o app
+reconhece a concessionária e o tipo do documento pelo **conteúdo** (CNPJ e
+palavras-chave; nome do arquivo/pasta só como último recurso) e devolve sempre
+as mesmas abas, diferenciadas pela coluna `fornecedor`:
+
+| Aba | Conteúdo |
+|---|---|
+| `fatura_agua` | uma linha por fatura individual (qualquer concessionária) **ou** por conta da fatura analítica da Saneago (`origem = analitica`) |
+| `itens_agua` | lançamentos com `categoria_valor` (agua / esgoto / taxas / multa_juros / credito / outros) |
+| `historico_agua` | histórico de consumo impresso (6–12 meses) |
+| `borderos_agua` | borderôs da Saneago: totais, base de cálculo, IRPJ retido (4,80 %), valor final, `bate_total` |
+| `contas_bordero_agua` | cada conta de cada borderô (valores brutos) |
+| `validacao_agua` | ocorrências das regras (ITENS_NAO_FECHAM, CONTA_FORA_DO_MAPA, BORDERO_NAO_CONFERE, ANALITICA_DIVERGE_BORDERO…) |
+| `mapa_contas_agua` | o mapa de contas ativo (quando há) |
+
+Concessionárias reconhecidas (`core/agua/schema_agua.py`): SANEAGO (borderô e
+analítica), SAE_CATALAO, DEMAE_CALDAS_NOVAS, DEMAE_PANAMA, SAAE_ABADIANIA,
+SAAE_CORUMBA, SAAE_LEOPOLDO_BULHOES, SAAE_MINEIROS, SANESC, SAO_SIMAO_SA,
+AGUAS_IPAMERI, BURITI_ALEGRE_AMBIENTAL, CODEGO. PDFs digitalizados (Saneago
+2021–2023, DEMAE Panamá, Abadiânia 2021…) passam por OCR posicional.
+
+- **Mapa de contas** (`core/agua/mapa_conta.py`): cadastro conta → unidade
+  institucional / serviços; importa o `contas.json` do projeto original, uma
+  planilha, ou é gerado a partir do próprio resultado.
+- **Linha de comando**: `FaturasDeEnergiaCLI.exe --cli --agua <pasta> [--agua …]
+  --saida faturas_agua.xlsx [--csv DIR] [--mapa-contas ARQ] [--sem-ocr]`.
+- Os layouts e as expressões regulares partiram do repositório de extratores
+  de água de **Matheus Braga**
+  ([MatheusBraga1106/ProjetoAutoma--oFatura](https://github.com/MatheusBraga1106/ProjetoAutoma--oFatura)),
+  reescritos sobre o texto em layout do PyMuPDF (sem `pdftotext`), com OCR e
+  três concessionárias a mais (SANESC, São Simão, Leopoldo de Bulhões).
+
+## Atualização obrigatória
+
+Ao abrir, o app consulta a última **Release** do GitHub
+(`core/atualizacao.py`). Se houver versão mais nova, mostra um aviso
+bloqueante com os botões *Baixar nova versão* / *Ver no GitHub* / *Sair*.
+Sem internet (ou qualquer falha na consulta) o app segue normalmente. Para
+desligar a verificação (testes, capturas de tela): variável de ambiente
+`FATURAS_SEM_ATUALIZACAO=1`.
+
+---
+
 ## Arquitetura
 
 ```
 src/faturas_app/
-├── cli.py                # modo linha de comando (paralelo, cache por PDF, CSV por aba)
+├── cli.py                # modo linha de comando (paralelo, cache por PDF, CSV por aba; --agua)
 ├── core/                 # núcleo, sem dependência de GUI
+│   ├── atualizacao.py    # verificação de versão nas Releases do GitHub (atualização obrigatória)
+│   ├── agua/             # ÁGUA: texto.py (layout + OCR), identificar.py, um extrator por família de
+│   │                     #   concessionária, schema_agua.py, mapa_conta.py, derivados_agua.py (validação),
+│   │                     #   controller_agua.py (lote, cache, planilha), glossario_agua.py
 │   ├── schema.py         # esquema CANÔNICO (colunas internas fixas) + apelidos + chaves de dedup
 │   ├── equatorial.py     # processador Equatorial (porte do notebook)
 │   ├── chesp.py          # processador CHESP + OCR (PyMuPDF + pytesseract)
@@ -57,7 +116,8 @@ src/faturas_app/
 │   ├── concat.py         # concatenação com remapeamento canônico + dedup
 │   └── controller.py     # orquestra o processamento das pastas (progresso/cancelar)
 └── gui/                  # interface CustomTkinter
-    ├── app.py            # janela principal (2 abas)
+    ├── app.py            # janela principal (domínios Energia Elétrica / Água + aviso de atualização)
+    ├── tab_agua.py       # Água: processar pastas, mapa de contas, adicionar a uma planilha
     ├── tab_processar.py  # PDF -> planilha
     ├── tab_concatenar.py # upload + novas faturas -> concatena
     ├── columns_editor.py # editor de colunas/abas

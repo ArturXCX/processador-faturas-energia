@@ -46,6 +46,12 @@ def _selfcheck(destino: str) -> int:
         reg("glossario", n > 50, f"{n} termos")
     except Exception as e:  # noqa: BLE001
         reg("glossario", False, repr(e))
+    try:
+        from faturas_app.core.agua import extrator, glossario_agua  # noqa: F401
+        n = len(glossario_agua.construir_glossario_df())
+        reg("agua", n > 30, f"{n} termos")
+    except Exception as e:  # noqa: BLE001
+        reg("agua", False, repr(e))
 
     with open(destino, "w", encoding="utf-8") as f:
         f.write("\n".join(linhas) + f"\n\nRESULTADO: {'OK' if rc == 0 else 'FALHA'}\n")

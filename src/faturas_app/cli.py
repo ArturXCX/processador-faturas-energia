@@ -236,9 +236,14 @@ def _args(argv):
         prog="faturas-cli",
         description="Processador de Faturas de Energia — modo linha de comando "
                     f"(v{__version__}).")
-    p.add_argument("--pasta", action="append", required=True, metavar="DIR[=FORNECEDOR]",
-                   help="pasta com PDFs; repita para várias. FORNECEDOR = EQUATORIAL ou "
+    p.add_argument("--pasta", action="append", metavar="DIR[=FORNECEDOR]",
+                   help="pasta com PDFs de ENERGIA; repita para várias. FORNECEDOR = EQUATORIAL ou "
                         "CHESP (se omitido, vem do nome da pasta).")
+    p.add_argument("--agua", action="append", metavar="DIR",
+                   help="pasta com PDFs de ÁGUA (qualquer concessionária; subpastas sempre incluídas). "
+                        "Repita para várias. Não combine com --pasta na mesma execução.")
+    p.add_argument("--mapa-contas", metavar="ARQ", help="água: importar este mapa de contas (contas.json/xlsx/csv) antes")
+    p.add_argument("--sem-ocr", action="store_true", help="água: não aplicar OCR nos PDFs digitalizados")
     p.add_argument("--subpastas", action="store_true", help="incluir subpastas")
     p.add_argument("--saida", required=True, metavar="ARQ.xlsx", help="planilha de saída")
     p.add_argument("--csv", metavar="DIR", help="também gravar um CSV por aba nesta pasta")
@@ -260,6 +265,56 @@ def _args(argv):
     return p.parse_args(argv)
 
 
+def _main_agua(a, saida: str, log) -> int:
+    """Modo ÁGUA: todas as concessionárias no mesmo modelo de planilha."""
+    from .core.agua import controller_agua, mapa_conta
+
+    if a.mapa_contas:
+        m = mapa_conta.importar(a.mapa_contas)
+        log(f"Mapa de contas importado: {m['total_contas']} conta(s).")
+    if mapa_conta.ativo():
+        m = mapa_conta.metadados()
+        log(f"Mapa de contas ativo: {m['total_contas']} conta(s) ({m['origem']}).")
+    else:
+        log("Sem mapa de contas: conta_canonica = dígitos da conta; sem unidade institucional.")
+    pastas = [os.path.abspath(p) for p in a.agua]
+    total = controller_agua.contar_pdfs(pastas)
+    if not total:
+        raise SystemExit("Nenhum PDF encontrado.")
+    cache = None if a.cache == "-" else (a.cache or os.path.join(os.path.dirname(saida), "cache_agua"))
+    log(f"{total} PDF(s) de água em {len(pastas)} pasta(s)." + (f" Cache: {cache}" if cache else ""))
+    passo = max(1, total // 40)
+
+    def prog(i, n, nome):
+        if i % passo == 0 or i == n:
+            log(f"  {i}/{n} — {nome}")
+
+    lote = controller_agua.processar_pastas(pastas, prog, cache_dir=cache, ocr=not a.sem_ocr, paralelo=a.paralelo,
+                                            modo_link=a.link, template=a.template)
+    log(lote.resumo())
+    dfs = controller_agua.dataframes(lote)
+    controller_agua.escrever_planilha(dfs, saida)
+    log(f"Planilha: {saida}")
+    if a.csv:
+        controller_agua.gravar_csv(dfs, os.path.abspath(a.csv))
+        log(f"CSV por aba em: {os.path.abspath(a.csv)}")
+    if lote.erros:
+        fp_err = os.path.splitext(saida)[0] + "_erros.txt"
+        with open(fp_err, "w", encoding="utf-8") as f:
+            for e in lote.erros:
+                f.write(f"{e.arquivo}: {e.mensagem}\n")
+        log(f"Erros: {fp_err}")
+    for av in lote.resultado.avisos[:20]:
+        log(f"  aviso: {av}")
+    cont: dict[str, int] = {}
+    for v in lote.validacao:
+        cont[v["gravidade"]] = cont.get(v["gravidade"], 0) + 1
+    if cont:
+        log("Validação: " + ", ".join(f"{k} {v}" for k, v in cont.items()) + " (aba 'validacao_agua').")
+    log("Linhas por aba: " + ", ".join(f"{k} {len(df)}" for k, df in dfs.items()))
+    return 0
+
+
 def main(argv=None) -> int:
     a = _args(argv if argv is not None else sys.argv[1:])
     saida = os.path.abspath(a.saida)
@@ -275,6 +330,15 @@ def main(argv=None) -> int:
             log_fp.flush()
 
     log(f"== Processador de Faturas de Energia v{__version__} — modo CLI ==")
+    if a.agua and a.pasta:
+        raise SystemExit("Use --pasta (energia) OU --agua (água), não os dois na mesma execução.")
+    if not a.agua and not a.pasta:
+        raise SystemExit("Informe --pasta (energia) ou --agua (água).")
+    if a.agua:
+        rc = _main_agua(a, saida, log)
+        if log_fp:
+            log_fp.close()
+        return rc
     if a.mapa_uc:
         importar_mapa_uc(a.mapa_uc, usar_medidor=not a.sem_medidor,
                          extras=not a.sem_extras, log=log)

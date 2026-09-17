@@ -1,13 +1,41 @@
-========================================================
- PROCESSADOR DE FATURAS DE ENERGIA  (Equatorial / CHESP)
-========================================================
+==========================================================================
+ PROCESSADOR DE FATURAS DE ENERGIA E ÁGUA  (Equatorial / CHESP / Saneago…)
+==========================================================================
 
 O QUE É
 -------
-Aplicativo para transformar PDFs de faturas de energia em uma planilha Excel
-organizada (abas: fatura, cliente, itens_fatura, impostos, medicao).
-Funciona com faturas da EQUATORIAL e da CHESP. Não é preciso instalar nada
-(nem Python) — é só extrair a pasta e abrir o programa.
+Aplicativo para transformar PDFs de faturas de energia (EQUATORIAL, CHESP e
+borderôs) e de ÁGUA (Saneago — borderô e fatura analítica —, SAE Catalão,
+DEMAE Caldas Novas e Panamá, SAAEs de Abadiânia, Corumbá, Leopoldo de Bulhões
+e Mineiros, SANESC, São Simão, Águas de Ipameri, Buriti Alegre Ambiental) em
+planilhas Excel organizadas. Não é preciso instalar nada (nem Python) — é só
+extrair a pasta e abrir o programa. Manual completo com capturas de tela:
+docs/MANUAL_DE_USO.md no repositório (GitHub).
+
+
+ATUALIZAÇÃO OBRIGATÓRIA (v4.0)
+------------------------------
+Ao abrir, o programa consulta a última versão publicada no GitHub (Releases).
+Se houver versão mais nova, aparece um aviso e o programa fica bloqueado até
+você baixar e instalar a nova versão (botão "Baixar nova versão"). Sem
+internet o programa funciona normalmente.
+
+
+ABA "ÁGUA" (v4.0)
+-----------------
+1. "Adicionar pasta": a pasta com os PDFs de água — pode ser a pasta-mãe com
+   todas as concessionárias (subpastas por ano são lidas). O programa
+   reconhece a concessionária e o tipo (fatura, borderô ou analítica da
+   Saneago) pelo conteúdo de cada PDF.
+2. (Opcional) "Mapa de contas": importe o contas.json / planilha de contas ou
+   gere um mapa a partir do resultado, para a planilha sair com a conta
+   canônica e a unidade de cada conta.
+3. "Processar faturas de água" e depois "Salvar planilha…". Todas as
+   concessionárias saem nas MESMAS abas (fatura_agua, itens_agua,
+   historico_agua, borderos_agua, contas_bordero_agua, validacao_agua),
+   diferenciadas pela coluna "fornecedor". PDFs digitalizados passam por OCR.
+4. "Adicionar a uma planilha": complementa uma planilha de água já existente
+   com PDFs novos (repetidos ficam de fora).
 
 
 COMO ABRIR

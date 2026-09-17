@@ -2,21 +2,25 @@
 from __future__ import annotations
 
 import os
+import queue
 import sys
+import threading
 import traceback
+import webbrowser
 from pathlib import Path
 from tkinter import messagebox
 
 import customtkinter as ctk
 
 from .. import APP_NAME, __version__
-from ..core import ocr, build_info
+from ..core import ocr, build_info, atualizacao
 from .tab_processar import AbaProcessar
 from .tab_concatenar import AbaConcatenar
 from .tab_parametros import AbaParametros
 from .tab_hardcodes import AbaHardcodes
 from .tab_borderos import AbaBorderos
 from .tab_borderos_concatenar import AbaBorderosConcatenar
+from .tab_agua import AbaAgua, AbaAguaConcatenar
 
 
 def _caminho_icone() -> str | None:
@@ -50,22 +54,92 @@ class App(ctk.CTk):
 
         self._cabecalho()
         self._nivel_dominio()
+        self._janela_atualizacao = None
+        self.after(400, self._verificar_atualizacao)
 
     def _nivel_dominio(self):
         """
-        Nível de abas mais alto — hoje só "Energia Elétrica" (única opção). No
-        futuro, outros domínios (ex.: Água) entrarão aqui como novas abas
-        irmãs, cada uma com seu próprio seletor Faturas/Borderôs por baixo.
+        Nível de abas mais alto: "Energia Elétrica" (faturas + borderôs) e "Água"
+        (todas as concessionárias no mesmo modelo de planilha).
         """
         tabs = ctk.CTkTabview(self)
         tabs.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 12))
         tabs.add("Energia Elétrica")
+        tabs.add("Água")
         aba = tabs.tab("Energia Elétrica")
         aba.grid_columnconfigure(0, weight=1)
         aba.grid_rowconfigure(1, weight=1)
 
         self._seletor_conjunto(aba)
         self._conjuntos(aba)
+        self._dominio_agua(tabs.tab("Água"))
+
+    def _dominio_agua(self, master):
+        master.grid_columnconfigure(0, weight=1)
+        master.grid_rowconfigure(0, weight=1)
+        self._tab_agua = ctk.CTkTabview(master)
+        self._tab_agua.grid(row=0, column=0, sticky="nsew")
+        self._tab_agua.add("Processar faturas de água")
+        self._tab_agua.add("Adicionar a uma planilha")
+        AbaAgua(self._tab_agua.tab("Processar faturas de água")).pack(fill="both", expand=True, padx=4, pady=4)
+        AbaAguaConcatenar(self._tab_agua.tab("Adicionar a uma planilha")).pack(fill="both", expand=True, padx=4, pady=4)
+
+    # ── atualização obrigatória (GitHub Releases) ─────────────────────────
+    def _verificar_atualizacao(self):
+        """Consulta a última release em segundo plano; online e desatualizado → aviso bloqueante. Offline → segue."""
+        fila: queue.Queue = queue.Queue()
+
+        def worker():
+            try:
+                fila.put(atualizacao.verificar())
+            except Exception:  # noqa: BLE001 — nunca derruba o app
+                fila.put(None)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+        def poll():
+            try:
+                rel = fila.get_nowait()
+            except queue.Empty:
+                self.after(300, poll)
+                return
+            if rel:
+                self._exigir_atualizacao(rel)
+
+        self.after(300, poll)
+
+    def _exigir_atualizacao(self, rel: dict):
+        top = ctk.CTkToplevel(self)
+        top.title("Atualização obrigatória")
+        top.geometry("560x330")
+        top.resizable(False, False)
+        top.transient(self)
+        top.protocol("WM_DELETE_WINDOW", lambda: None)   # não fecha: a atualização é obrigatória
+        ctk.CTkLabel(top, text="Nova versão disponível", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(22, 8))
+        ctk.CTkLabel(top, justify="center", wraplength=500,
+                     text=(f"Você está usando a versão {__version__}.\n"
+                           f"A versão {rel.get('tag')} ({rel.get('publicada') or 'publicada no GitHub'}) já está disponível.\n\n"
+                           "Para continuar usando o aplicativo é preciso baixar e instalar a nova versão.\n"
+                           "Sem internet o aplicativo continua funcionando normalmente.")).pack(pady=(0, 14))
+        botoes = ctk.CTkFrame(top, fg_color="transparent")
+        botoes.pack(pady=6)
+        alvo = rel.get("instalador") or rel.get("zip") or rel.get("url") or atualizacao.URL_RELEASES
+        ctk.CTkButton(botoes, text="Baixar nova versão", height=38, width=200,
+                      command=lambda: webbrowser.open(alvo)).pack(side="left", padx=6)
+        ctk.CTkButton(botoes, text="Ver no GitHub", height=38, width=140, fg_color="transparent", border_width=1,
+                      text_color=("gray30", "gray80"),
+                      command=lambda: webbrowser.open(rel.get("url") or atualizacao.URL_RELEASES)).pack(side="left", padx=6)
+        ctk.CTkButton(top, text="Sair do aplicativo", height=32, width=160, fg_color=("#9a3b3b", "#7a2e2e"),
+                      command=self.destroy).pack(pady=(10, 0))
+        self._janela_atualizacao = top
+
+        def travar():
+            try:
+                top.grab_set()
+                top.focus_force()
+            except Exception:
+                pass
+        top.after(150, travar)
 
     def _seletor_conjunto(self, master):
         seletor = ctk.CTkSegmentedButton(
@@ -141,7 +215,8 @@ class App(ctk.CTk):
         titulos.grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(titulos, text=APP_NAME,
                      font=ctk.CTkFont(size=22, weight="bold")).pack(anchor="w")
-        ctk.CTkLabel(titulos, text="Faturas (Equatorial · CHESP) e Borderôs  —  PDFs → planilha Excel",
+        ctk.CTkLabel(titulos, text="Energia (Equatorial · CHESP · borderôs) e Água (Saneago · SAAEs · DEMAEs · SAE · "
+                                   "SANESC…)  —  PDFs → planilha Excel",
                      text_color=("gray40", "gray65")).pack(anchor="w")
         atualizado = build_info.data_atualizacao()
         if atualizado:
