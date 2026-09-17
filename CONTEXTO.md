@@ -17,6 +17,19 @@ Status: **pronto para uso** (v2.1.0, set/2026). Entregáveis atuais em `dist/`:
 
 ---
 
+## 0. v4.0 (16/09/2026) — água e atualização obrigatória
+
+- Novo domínio **Água** (`src/faturas_app/core/agua/`, `gui/tab_agua.py`): 12 concessionárias
+  no MESMO esquema (`schema_agua.py`), texto em layout + OCR (`texto.py`), identificação pelo
+  CNPJ (`identificar.py`), um extrator por família, mapa de contas, validação e cruzamento
+  borderô × analítica da Saneago, CLI `--agua`. Detalhes: `docs/DOCUMENTACAO_EXTRATOR.md`;
+  manual com capturas: `docs/MANUAL_DE_USO.md`. Testes: `tests/test_agua.py`.
+- **Atualização obrigatória** (`core/atualizacao.py` + `gui/app.py`): consulta a última release
+  do GitHub; se houver versão mais nova, modal bloqueante; offline segue. `FATURAS_SEM_ATUALIZACAO=1`
+  desliga (testes/capturas).
+- `__version__ = 4.0.0`; `build/installer.iss` acompanha. O mesmo código roda na VM do bot
+  (`/home/geestor/app/src`) — ver `D:\proj_ufg\tjgo_faturas_db` (fase 4).
+
 ## 1. O que é o app (resumo de 30s)
 
 App **desktop Windows** (CustomTkinter, empacotado com PyInstaller — usuário final
