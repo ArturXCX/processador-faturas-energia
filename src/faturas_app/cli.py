@@ -35,7 +35,7 @@ import unicodedata
 
 from . import __version__
 
-FORNECEDORES = ("EQUATORIAL", "CHESP")
+FORNECEDORES = ("EQUATORIAL", "CHESP", "ENEL")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

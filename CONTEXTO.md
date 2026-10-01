@@ -17,6 +17,15 @@ Status: **pronto para uso** (v2.1.0, set/2026). Entregáveis atuais em `dist/`:
 
 ---
 
+## 0.1 v4.1 (01/10/2026) — fornecedora ENEL
+
+- `core/enel.py`: faturas antigas da ENEL/CELG D (2018–2022, layouts GRUPO_A, B_2018, B_2020), quase sempre
+  digitalizadas: OCR próprio por colunas recortadas, leituras candidatas por item e programação dinâmica para fechar com
+  o total impresso. DANF3E nativo → `equatorial.py`; DANF3E escaneado → só cabeçalho/total/tributos (`_somente_cabecalho`).
+  Detalhes em `docs/DOCUMENTACAO_EXTRATOR.md` §3.1; testes em `tests/test_enel.py`.
+- Fornecedora `ENEL` no controller, CLI (`--pasta dir=ENEL`) e GUI; `borderos.py` relê por OCR o scan cujo texto embutido
+  não reconcilia. Feito para o acervo do INMETRO (4ª organização do gEEstor). `__version__ = 4.1.0`.
+
 ## 0. v4.0 (16/09/2026) — água e atualização obrigatória
 
 - Novo domínio **Água** (`src/faturas_app/core/agua/`, `gui/tab_agua.py`): 12 concessionárias

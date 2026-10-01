@@ -1,7 +1,7 @@
-# Processador de Faturas de Energia e Água (Equatorial / CHESP / Saneago e concessionárias municipais)
+# Processador de Faturas de Energia e Água (Equatorial / ENEL / CHESP / Saneago e concessionárias municipais)
 
 Aplicativo desktop (Windows) que converte PDFs de faturas de **energia**
-(Equatorial, CHESP e borderôs) e de **água** (Saneago — borderô e fatura
+(Equatorial, ENEL antiga digitalizada, CHESP e borderôs) e de **água** (Saneago — borderô e fatura
 analítica —, SAE Catalão, DEMAE Caldas Novas e Panamá, SAAEs de Abadiânia,
 Corumbá, Leopoldo de Bulhões e Mineiros, SANESC, São Simão Saneamento
 Ambiental, Águas de Ipameri, Buriti Alegre Ambiental, CODEGO) em planilhas
@@ -9,6 +9,11 @@ Excel estruturadas, permite editar/renomear colunas e abas, e concatenar novas
 faturas a uma planilha já existente. Distribuído como executável — o usuário
 final **não precisa de Python instalado**.
 
+> **v4.1 (01/10/2026)** — nova fornecedora **ENEL**: faturas antigas da ENEL/CELG D
+> (2018–2022, quase sempre digitalizadas) lidas por OCR com reconciliação dos itens
+> pelo total impresso (escolha "ENEL" na pasta). Borderôs escaneados com texto
+> embutido ruim passam a ser relidos por OCR.
+>
 > **v4.0 (16/09/2026)** — novo domínio **Água**: todas as concessionárias no
 > **mesmo modelo de planilha** (`fatura_agua`, `itens_agua`, `historico_agua`,
 > `borderos_agua`, `contas_bordero_agua`, `validacao_agua`, `mapa_contas_agua`),
@@ -109,6 +114,7 @@ src/faturas_app/
 │   ├── schema.py         # esquema CANÔNICO (colunas internas fixas) + apelidos + chaves de dedup
 │   ├── equatorial.py     # processador Equatorial (porte do notebook)
 │   ├── chesp.py          # processador CHESP + OCR (PyMuPDF + pytesseract)
+│   ├── enel.py           # ENEL antiga (2018–2022) digitalizada: OCR + reconciliação pelo total
 │   ├── ocr.py            # localização do Tesseract (embutido ou do sistema)
 │   ├── dataset.py        # acumula linhas canônicas -> DataFrames
 │   ├── profile.py        # camada de EXIBIÇÃO (renomear/incluir/excluir) + metadados

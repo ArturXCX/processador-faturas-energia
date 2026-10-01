@@ -43,13 +43,14 @@ PDF ──► extrator (faturas_app.core) ──► linhas canônicas ──┬�
 
 ```
 src/faturas_app/
-├── __init__.py              __version__ (4.0.0) e APP_NAME
+├── __init__.py              __version__ (4.1.0) e APP_NAME
 ├── __main__.py              entrada: GUI, --cli, e autoverificação do exe (FATURAS_SELFCHECK)
 ├── cli.py                   modo linha de comando: energia (--pasta) e água (--agua), cache, paralelo, CSV, log
 ├── core/
 │   ├── schema.py            colunas CANÔNICAS de energia por aba, apelidos, chaves de dedup, cores das abas
 │   ├── equatorial.py        extrator de faturas Equatorial/ENEL (texto do PDF + regex por bloco)
 │   ├── chesp.py             extrator de faturas CHESP (texto ou OCR)
+│   ├── enel.py              faturas antigas da ENEL/CELG D (2018–2022, digitalizadas): OCR + reconciliação com o total
 │   ├── ocr.py               localização do Tesseract (embutido em tesseract/ ou do sistema) e OCR de página
 │   ├── borderos.py          borderôs de energia (Equatorial/ENEL): âncoras posicionais, OCR, conferência soma × total
 │   ├── dataset.py           acumula as linhas canônicas e monta os DataFrames das abas (+ abas derivadas)
@@ -116,12 +117,38 @@ docs/                        este documento, o manual de uso e as capturas de te
 Identificação: `id_fatura = <FORNECEDORA>_<número da fatura>` liga todas as abas; `numero_fatura` guarda o número
 original (na Equatorial é o nome do PDF no Drive, o que faz o `link_pdf` de busca funcionar).
 
+### 3.1 ENEL — faturas antigas digitalizadas (v4.1, `core/enel.py`)
+
+Faturas da ENEL/CELG D de 2018 a início de 2022, anteriores ao DANF3E, quase sempre **digitalizadas** (o texto embutido,
+quando existe, é o OCR ruim do scanner). Três layouts: **GRUPO_A** (dois itens por linha, PRODUTO QUANTIDADE TARIFA
+VALOR ×2, memória de cálculo da medição numa página à parte), **B_2018** (coluna LANÇAMENTOS à direita) e **B_2020**
+("ITENS QTD VALOR UNIT. VALOR" ×2 e canhoto). Como funciona:
+
+1. OCR próprio (Tesseract, 300 dpi) da página do corpo — que pode não ser a 1ª (verso escaneado antes) nem estar de pé
+   (OSD/180°) — com as **caixas das palavras**; pelo cabeçalho do quadro de itens recortam-se as **colunas de itens**, que
+   são lidas de novo sozinhas e ampliadas; o total e o canhoto também são relidos em recorte.
+2. Cada item fica com **várias leituras candidatas** (o OCR troca asterisco por dígito, perde vírgula, perde o sinal),
+   mais quantidade × tarifa (a ENEL **trunca** os centavos).
+3. **Programação dinâmica**: escolhe uma leitura por item para que a soma dê **exatamente o total** impresso (e o
+   fornecimento dê a base do ICMS, quando legível); um total "lixo" que só fecharia trocando muitos itens é recusado.
+   Um único item ilegível pode fechar pela diferença, e uma linha de retenção perdida é reposta — sempre com aviso em
+   `mensagens_importantes`.
+4. Nomes dos itens iguais aos da Equatorial (`CONSUMO FP`, `PARCELA TE P`, `ADC BAND. AMARELA TE HR`,
+   `COFINS LEI 9430(-)`…), para a série histórica ficar contínua. `id_fatura = ENEL_<UC>_<AAAAMM>`.
+
+`processar_pdf(pdf, dicas={'valor_total': …})` aceita o líquido da UC no borderô como reforço do total. DANF3E com texto
+nativo vai para `equatorial.py`; DANF3E **escaneado** em baixa resolução sai só com cabeçalho, total e tributos
+(`_somente_cabecalho`; o controller não o descarta). Medido no acervo do INMETRO (86 faturas 2018–2022): 74 fecham sozinhas
+e as 12 restantes com o total do borderô; todas as que fecham sozinhas batem com o borderô.
+
 ## 4. Energia — borderôs (faturas agrupadas)
 
 `core/borderos.py` lê o borderô da Equatorial/ENEL (várias UCs num único documento):
 
 * **identidade** vem do conteúdo (número da fatura agrupada, código de agrupamento, competência, vencimento); o nome do
   arquivo é só o último recurso;
+* **scans com texto embutido ruim** (v4.1): se a leitura pelo texto do PDF não reconcilia, o borderô é relido inteiro por
+  OCR e fica a leitura que fecha (ou que acha mais UCs); se a soma das UCs aparece impressa como valor, ela é o total;
 * **cabeçalho**: total, quantidade de contas, bruto e retenções (âncoras de texto);
 * **unidades**: as palavras posicionais de cada página (`page.get_text("words")`) são agrupadas em linhas por `y`
   (`_clusterizar_linhas`) e cada linha com uma UC (inclusive dígito verificador `X`) vira uma linha da aba `unidades`
@@ -291,7 +318,7 @@ CLI do app instalado em `/home/geestor/app/src` (a mesma árvore `faturas_app` d
 
 ## 9. Testes, build e publicação
 
-* `PYTHONPATH=src python -m pytest tests -q` — 147 testes; `tests/test_agua.py` usa páginas sintéticas no layout real
+* `PYTHONPATH=src python -m pytest tests -q` — 156 testes (`tests/test_enel.py`: números do OCR, itens, reconciliação); `tests/test_agua.py` usa páginas sintéticas no layout real
   (borderô Saneago 2024, fatura GSAN 2024) para cobrir a leitura por posição, a categoria dos itens, a validação, a
   planilha e a concatenação, além da comparação de versões da atualização obrigatória.
 * `build\build_tudo.ps1` gera `dist\FaturasDeEnergia.zip` (portátil) e `dist\FaturasDeEnergia-Setup.exe` (Inno Setup);

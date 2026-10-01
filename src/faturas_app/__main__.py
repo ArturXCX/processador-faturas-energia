@@ -47,6 +47,11 @@ def _selfcheck(destino: str) -> int:
     except Exception as e:  # noqa: BLE001
         reg("glossario", False, repr(e))
     try:
+        from faturas_app.core import controller, enel
+        reg("enel", "ENEL" in controller.PROCESSADORES and enel.candidatos_valor("****2.040,88")[0] == 2040.88)
+    except Exception as e:  # noqa: BLE001
+        reg("enel", False, repr(e))
+    try:
         from faturas_app.core.agua import extrator, glossario_agua  # noqa: F401
         n = len(glossario_agua.construir_glossario_df())
         reg("agua", n > 30, f"{n} termos")
