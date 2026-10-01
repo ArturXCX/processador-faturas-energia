@@ -946,6 +946,15 @@ def _aplicar_extras_b2020(f, ext):
         f['competencia'] = f"{m.group(2)}-{m.group(1)}"
 
 
+def _competencia_do_nome(nome):
+    """'03-2019 - Fatura Goiânia.pdf' / 'fatura_2021-03.pdf' → 'AAAA-MM' (último recurso, com aviso)."""
+    m = re.search(r'(?<!\d)(0[1-9]|1[0-2])[-_. ](20[12]\d)(?!\d)', nome)
+    if m:
+        return f"{m.group(2)}-{m.group(1)}"
+    m = re.search(r'(?<!\d)(20[12]\d)[-_. ](0[1-9]|1[0-2])(?!\d)', nome)
+    return f"{m.group(1)}-{m.group(2)}" if m else None
+
+
 def _danf3e_nativo(pdf_path):
     """O PDF é um DANF3E gerado (texto embutido limpo, não um scan com OCR do scanner)?"""
     import fitz
@@ -1079,6 +1088,9 @@ def processar_pdf(pdf_path, dicas=None):
         _aplicar_extras_b2020(f, _extras_b2020(doc, pp, palavras))
     else:
         f['_total_recorte'] = _total_recortado(doc, pp, palavras)
+    comp_nome = _competencia_do_nome(doc.nome)
+    if not f.get('competencia') and comp_nome:
+        f['competencia'], f['_comp_pelo_nome'] = comp_nome, True
 
     totais = Counter()
     for k, peso in (('_total', 3), ('_total_recorte', 3), ('_total_canhoto', 3), ('_total_conta', 3)):
@@ -1149,6 +1161,8 @@ def processar_pdf(pdf_path, dicas=None):
         id_fatura = f"{FORNECEDOR}_{os.path.splitext(doc.nome)[0]}"
 
     avisos = [f"valor de '{g['nome']}' deduzido do total (ilegível no OCR)" for g in grupos if g.get('pela_diferenca')]
+    if f.get('_comp_pelo_nome'):
+        avisos.append("competência tirada do nome do arquivo (ilegível no OCR)")
     if total is None:
         avisos.append("total da fatura ilegível no OCR")
     elif abs(soma - total) > 0.005:
