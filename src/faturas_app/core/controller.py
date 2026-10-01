@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass, field
 from glob import glob
 
-from . import equatorial, chesp
+from . import equatorial, chesp, enel
 from .dataset import Dataset, _RE_ITEM_INFORMATIVO
 
 # O processador pode devolver UM resultado (dict) ou uma LISTA de resultados
@@ -17,13 +17,15 @@ from .dataset import Dataset, _RE_ITEM_INFORMATIVO
 PROCESSADORES = {
     "EQUATORIAL": equatorial.processar_pdf_multi,
     "CHESP":      chesp.processar_pdf,
+    # faturas antigas da ENEL/CELG D (2018–2022, digitalizadas) e DANF3E escaneados: OCR próprio
+    "ENEL":       enel.processar_pdf,
 }
 
 
 @dataclass
 class Job:
     pasta: str
-    fornecedor: str          # "EQUATORIAL" ou "CHESP"
+    fornecedor: str          # "EQUATORIAL", "CHESP" ou "ENEL"
     incluir_subpastas: bool = False
 
 
@@ -65,6 +67,8 @@ def _fatura_ilegivel(resultado: dict) -> bool:
     faturas são DESCARTADAS por completo, com registro no log de erros, para
     não entrar na planilha uma fatura cuja soma de itens nunca fecharia.
     """
+    if resultado.get("_somente_cabecalho"):
+        return False     # scan em baixa resolução: cabeçalho/total confiáveis, itens a completar (avisado)
     fat = resultado.get("fatura") or {}
     total = fat.get("valor_total_r$")
     itens = [r for r in (resultado.get("itens_fatura") or [])

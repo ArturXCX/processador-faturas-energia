@@ -9,7 +9,7 @@ import customtkinter as ctk
 from ..core.controller import Job, listar_pdfs
 from ..core import links
 
-FORNECEDORES = ["EQUATORIAL", "CHESP"]
+FORNECEDORES = ["EQUATORIAL", "CHESP", "ENEL"]
 
 _LINK_OPCOES = {
     "Caminho local (sem link)": links.MODO_LOCAL,

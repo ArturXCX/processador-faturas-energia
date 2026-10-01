@@ -252,6 +252,15 @@ def _anchor_total(full: str):
     return total
 
 
+def _valores_impressos(full: str) -> set:
+    """Valores em R$ do texto (OCR), aceitando '.', ',' ou espaço como separador de milhar."""
+    vals = set()
+    for m in re.finditer(r"(?:R\$[\s*+'º°]*|L[IÍ]QUIDO:?\s*|TOTAL:?\s*)(\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2})(?!\d)", full):
+        t = m.group(1)
+        vals.add(round(float(re.sub(r"\D", "", t[:-3]) + "." + t[-2:]), 2))
+    return vals
+
+
 def _anchor_contas(full: str):
     m = re.search(r"Quantidade de contas[:\s]*([0-9]+)", full)
     if m:
@@ -506,12 +515,13 @@ def _ocr_palavras(page, dpi: int = OCR_DPI):
 
 
 class _PaginaOCR:
-    """Página que responde get_text() com o texto do PDF quando há texto, ou com OCR quando é imagem."""
+    """Página que responde get_text() com o texto do PDF quando há texto, ou com OCR quando é imagem
+    (ou sempre, com `forcar`: texto embutido que é o OCR ruim do próprio scanner)."""
 
-    def __init__(self, page):
+    def __init__(self, page, forcar: bool = False):
         self._page = page
         self._palavras = None
-        self.ocr = len((page.get_text() or "").strip()) < _MIN_TEXTO_PAGINA
+        self.ocr = forcar or len((page.get_text() or "").strip()) < _MIN_TEXTO_PAGINA
 
     def get_text(self, tipo: str = "text"):
         if not self.ocr:
@@ -526,8 +536,8 @@ class _PaginaOCR:
 
 
 class _DocOCR:
-    def __init__(self, doc):
-        self._paginas = [_PaginaOCR(doc[i]) for i in range(doc.page_count)]
+    def __init__(self, doc, forcar: bool = False):
+        self._paginas = [_PaginaOCR(doc[i], forcar) for i in range(doc.page_count)]
         self.page_count = doc.page_count
 
     def __getitem__(self, i):
@@ -554,15 +564,32 @@ class ResultadoBordero:
 
 
 def processar_pdf(path: str) -> ResultadoBordero:
-    """Processa um PDF de borderô e devolve o registro-cabeçalho + detalhes."""
+    """Processa um PDF de borderô e devolve o registro-cabeçalho + detalhes.
+
+    Scans com texto embutido (o OCR do próprio scanner, cheio de erros) passam no teste de
+    "tem texto" mas não reconciliam; nesse caso relê tudo com o nosso OCR e fica com a leitura
+    que fecha com o total (ou que acha mais UCs)."""
+    r = _processar_pdf(path)
+    b = r.bordero
+    if b["bate_total"] != "SIM" and b["escaneado"] == "NÃO" and _ocr_disponivel():
+        try:
+            r2 = _processar_pdf(path, forcar_ocr=True)
+        except Exception:  # noqa: BLE001 — a releitura é só um reforço
+            return r
+        if r2.bordero["bate_total"] == "SIM" or len(r2.unidades) > len(r.unidades):
+            return r2
+    return r
+
+
+def _processar_pdf(path: str, forcar_ocr: bool = False) -> ResultadoBordero:
     nome = os.path.basename(path)
     doc = fitz.open(path)
     usou_ocr = False
     texto_detalhe = sum(len(doc[i].get_text().strip()) for i in range(1, doc.page_count))
     texto_p1 = len(doc[0].get_text().strip()) if doc.page_count else 0
-    if (texto_detalhe < 300 or texto_p1 < _MIN_TEXTO_PAGINA) and _ocr_disponivel():
+    if forcar_ocr or ((texto_detalhe < 300 or texto_p1 < _MIN_TEXTO_PAGINA) and _ocr_disponivel()):
         # borderô digitalizado (todo ou só o detalhe): lê as páginas-imagem por OCR
-        doc = _DocOCR(doc)
+        doc = _DocOCR(doc, forcar=forcar_ocr)
         usou_ocr = doc.usou_ocr
     full = _texto_completo(doc)
     distribuidora = _distribuidora(full, nome)
@@ -593,6 +620,10 @@ def processar_pdf(path: str) -> ResultadoBordero:
 
     soma = round(sum(u["valor"] for u in unidades if u.get("valor") is not None), 2)
     bate = (total is not None) and (abs(soma - total) < TOL_TOTAL)
+    if not bate and unidades and soma in _valores_impressos(full):
+        # em texto de OCR o âncora do total pega às vezes outro valor (ex.: 'VALOR DO ICMS') ou perde o
+        # separador ('R$***7 184,69'): se a soma das UCs aparece impressa como valor, ela é o total
+        total, bate = soma, True
     # OCR que não acha nenhuma UC (ex.: o PDF só traz as páginas de cabeçalho) é detalhe não extraído,
     # não soma que não bate.
     sem_detalhe = escaneado or (usou_ocr and not unidades)
