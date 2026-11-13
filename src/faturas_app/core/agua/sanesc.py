@@ -48,12 +48,60 @@ def _boletim(doc, arquivo: str, fornecedor: str) -> Resultado:
     return res
 
 
+_RE_SEGUNDA_VIA = re.compile(r"2\s*[°ºªa]\s*VIA\s+DA\s+CONTA", re.IGNORECASE)
+_RE_MOEDA_ESPACO = r"\d{1,3}(?:[ .]\d{3})*,\d{2}"        # a 2ª via separa o milhar com espaço: "R$1 342,10"
+
+
+def _moeda_espaco(v) -> float | None:
+    return moeda(str(v).replace(" ", "")) if v else None
+
+
+def _segunda_via(doc, arquivo: str, fornecedor: str) -> Resultado:
+    """2ª via impressa do autoatendimento (2021): "2° VIA DA CONTA", número "7155032021-3" (cadastro + MM + AAAA − DV),
+    "Cod. ligação: 07155-5", "MÊS/ANO" com o valor na linha de baixo, "VALOR A PAGAR R$66,76" e as leituras numa linha só."""
+    res = Resultado()
+    texto = doc.texto.replace("\f", "\n")
+    f = nova_fatura(fornecedor, arquivo, doc.usou_ocr)
+    mn = rx(r"VIA DA CONTA[^\n]*\n(?:[^\n]*\n){0,2}?[^\n]*?\b(\d{8,12})-(\d)\b").search(texto)
+    if mn:
+        f["numero_fatura"] = mn.group(1)
+    lig = busca(r"Cod\.?\s*liga[çc][ãa]o:?\s*(\d{3,6})-\d", texto)
+    if lig:                                       # cadastro sem o dígito verificador, como nas guias de 2021 e nas contas 2022+
+        f["conta_formatada"], f["conta"] = lig, lig
+    f["competencia"] = competencia(busca(r"M[ÊE]S\s*/\s*ANO[^\n]*\n[^\n]*?\b(\d{1,2}/\d{4})\b", texto))
+    mv = rx(r"VENCIMENTO\s+VALOR A PAGAR\s*\n\s*(" + RE_DATA + r")\s+R\$\s*(" + _RE_MOEDA_ESPACO + ")").search(texto) \
+        or rx(r"VALOR A PAGAR\s*\n[^\n]*?(" + RE_DATA + r")\s+R\$\s*(" + _RE_MOEDA_ESPACO + r")\s*$", re.IGNORECASE | re.MULTILINE).search(texto)
+    if mv:
+        f["data_vencimento"], f["valor_total"] = mv.group(1), _moeda_espaco(mv.group(2))
+    f["data_leitura_atual"] = busca(r"DATA DE LEITURA[^\n]*\n\s*(" + RE_DATA + ")", texto)
+    f["data_emissao"] = busca(r"VIA DA CONTA[^\n]*\n(?:[^\n]*\n){0,4}?[^\n]*?(" + RE_DATA + r")\s*-\s*\d{2}:\d{2}", texto)
+    ml = rx(r"L\. ANTERIOR\s+L\. ATUAL[^\n]*\n\s*(\d+)\s+(\d+)\s+(\d+)\s*m3\s+(\d+)\s*m3").search(texto)
+    if ml:
+        f["leitura_anterior"], f["leitura_atual"], f["consumo_m3"], f["consumo_faturado_m3"] = (inteiro(x) for x in ml.groups())
+    f["hidrometro"] = busca(r"HIDR[ÔO]METRO\s+VAZ[ÃA]O[^\n]*\n\s*([A-Z0-9]{6,})", texto)
+    f["nome_cliente"] = busca(r"^\s*(TRIBUNAL DE JUSTI[ÇC]A[^\n]*?)\.?\s*$", texto, flags=re.IGNORECASE | re.MULTILINE)
+    f["logradouro"] = busca(r"Endere[çc]o:\s*(.+?)(?:\s{3,}|\s*$)", texto, flags=re.IGNORECASE | re.MULTILINE)
+    f["categoria"] = "PUB" if rx(r"RES\s+COM\s+IND\s+PUB\s*\n\s*0\s+0\s+0\s+[1-9]").search(texto) else None
+    itens = []
+    bloco = rx(r"DESCRI[ÇC][ÃA]O\s+VALOR\s*\n(.*?)DATA DE LEITURA", re.IGNORECASE | re.DOTALL).search(texto)
+    if bloco:
+        for k, mi in enumerate(re.finditer(r"^[ \t]*([A-Za-zÀ-ÿ][^\n]*?)[ \t]{2,}(" + _RE_MOEDA_ESPACO + r")[ \t]*$", bloco.group(1), re.MULTILINE), 1):
+            itens.append(novo_item(f, k, mi.group(1), _moeda_espaco(mi.group(2))))
+    f["observacao"] = "2ª via da conta (autoatendimento)"
+    fechar_fatura(f, itens, arquivo)
+    res.faturas.append(f)
+    res.itens.extend(itens)
+    return res
+
+
 def extrair(doc, arquivo: str, fornecedor: str = "SANESC") -> Resultado:
     texto = doc.texto.replace("\f", "\n")
     if re.search(r"N[úu]mero da guia|C[OÓ]{1,2}D\.?\s*LIG\.?:", texto):
         return _guia(doc, arquivo, fornecedor)
     if re.search(r"BOLETIM\s+DE\s+ARRECADA", texto):
         return _boletim(doc, arquivo, fornecedor)
+    if _RE_SEGUNDA_VIA.search(texto) and re.search(r"Cod\.?\s*liga[çc][ãa]o:", texto, re.IGNORECASE):
+        return _segunda_via(doc, arquivo, fornecedor)
     res = Resultado()
     f = nova_fatura(fornecedor, arquivo, doc.usou_ocr)
     m = re.search(r"^\s*(\d{6,})\s+([\d-]{6,})\s+([A-Z0-9]{6,})\s+(\d{1,2}/\d{4})\s+(" + RE_DATA + ")", texto, re.MULTILINE)
@@ -75,7 +123,7 @@ def extrair(doc, arquivo: str, fornecedor: str = "SANESC") -> Resultado:
             mv = re.search(r"^\s*(" + RE_DATA + r")\s+(\d{1,2}/\d{4})\s*$", texto, re.MULTILINE)
             if mv:
                 f["data_vencimento"], f["competencia"] = mv.group(1), competencia(mv.group(2))
-    ml = re.search(r"^\s*(\d+)\s+(\d+)\s+(" + RE_DATA + r")\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", texto, re.MULTILINE)
+    ml = re.search(r"^\s*(\d+)\s+(\d+)\s+(?:(?:" + RE_DATA + r"|\d+)\s+)?(" + RE_DATA + r")\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", texto, re.MULTILINE)
     if ml:
         f["dias"], f["data_leitura_atual"], f["leitura_anterior"], f["leitura_atual"] = inteiro(ml.group(2)), ml.group(3), inteiro(ml.group(4)), inteiro(ml.group(5))
         f["consumo_m3"], f["consumo_faturado_m3"] = inteiro(ml.group(6)), inteiro(ml.group(7))
@@ -83,7 +131,8 @@ def extrair(doc, arquivo: str, fornecedor: str = "SANESC") -> Resultado:
         ml2 = re.search(r"^\s*(\d{2,4})\s+(\d{2,4})\s+(\d{3,6})\s+(\d{1,2})\s*$", texto, re.MULTILINE)   # 2022: "72 72 2876 2" (cons fat, consumo, leitura, dias?)
         if ml2:
             f["consumo_faturado_m3"], f["consumo_m3"], f["leitura_atual"] = inteiro(ml2.group(1)), inteiro(ml2.group(2)), inteiro(ml2.group(3))
-    f["categoria"] = busca(r"Categoria\s+Ocorr[êe]ncia\s*\n\s*([A-Z]+)", texto) or busca(r"Categoria\s*\n\s*([A-Z]+)", texto)
+    f["categoria"] = busca(r"Categoria\s+Ocorr[êe]ncia\s*\n\s*([A-Z]+)", texto) or busca(r"Categoria\s*\n\s*([A-Z]+)", texto) \
+        or busca(r"Categoria\s+Ocorr[êe]ncia\s*\n[^\n]*?\b" + RE_DATA + r"\s+([A-Z]+)\s+[A-Z]+(?:\s+[A-Z]+)*\s*$", texto, flags=re.IGNORECASE | re.MULTILINE)   # dez/2025: "11/2025 68 6437 36 15/01/2026 PUBLICO  LEITURA NORMAL"
     f["tipo_consumo"] = busca(r"Ocorr[êe]ncia\s*\n[^\n]*?([A-Z]+\s+[A-Z]+)\s*$", texto, flags=re.IGNORECASE | re.MULTILINE)
     f["nome_cliente"] = busca(r"\d{6,}\s+(TRIBUNAL[^\n]+?)\s*$", texto, flags=re.IGNORECASE | re.MULTILINE) \
         or busca(r"Propriet[áa]rio\s*\n\s*(TRIBUNAL[^\n]+?)\s{2,}", texto) or busca(r"(TRIBUNAL DE JUSTI[CÇ]A[^\n]*?GOI[AÁ]S)", texto)

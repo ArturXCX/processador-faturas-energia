@@ -1,12 +1,13 @@
-# Manual de uso — aplicativo desktop e bot do Telegram (v4.0)
+# Manual de uso — aplicativo desktop e site gEEstor (v4.3)
 
 Este manual cobre as duas formas de trabalhar com as faturas de **energia** (Equatorial, CHESP e borderôs) e de **água**
 (Saneago e concessionárias municipais):
 
 1. o **aplicativo desktop** *Processador de Faturas de Energia* (Windows), que transforma PDFs em planilhas Excel na sua
    máquina — sem internet, sem banco de dados;
-2. o **bot do Telegram @doc_gEEstor_bot**, que guarda tudo num banco PostgreSQL na VM (uma organização por banco), responde
-   consultas, gera planilhas, recebe PDFs novos e alimenta o Power BI.
+2. o **site gEEstor** (https://unigeestor.emc.ufg.br), que guarda tudo num banco PostgreSQL na VM (uma organização por banco),
+   mostra as faturas e a conferência, gera planilhas, recebe PDFs novos e alimenta o Power BI. (O bot do Telegram
+   @doc_gEEstor_bot, que fazia esse papel, foi desativado em 12/11/2026: tudo é feito no site.)
 
 As capturas de tela são do aplicativo real na versão 4.0.0 (16/09/2026).
 
@@ -107,8 +108,8 @@ do órgão, com várias contas e retenção de IRPJ) ou **fatura analítica** da
 1. **Pastas com os PDFs de água** — pode ser a pasta-mãe do acervo inteiro (todas as concessionárias, subpastas por ano)
    ou uma pasta por concessionária. *Incluir subpastas (anos)* vem marcado.
 2. **Mapa de contas (opcional)** — cadastro *conta → unidade institucional / serviços*. Três botões:
-   * **Importar mapa (contas.json / xlsx / csv)…** — o `contas.json` do projeto original ou uma planilha com colunas
-     parecidas (CONTA_DV, CONTA, UNIDADE, ENDERECO, DISTRIBUIDORA, OPERANTE, AGUA, ESGOTO, SMRSU);
+   * **Importar mapa (json / xlsx / csv)…** — o `DICIONARIO_AGUA.json` do TJGO, o `contas.json` do projeto original ou uma planilha
+     com colunas parecidas (CONTA_DV, CONTA, UNIDADE, ENDERECO, DISTRIBUIDORA, OPERANTE, AGUA, ESGOTO, SMRSU);
    * **Gerar do resultado** — depois de processar, monta o mapa a partir das próprias faturas (conta, fornecedor, nome,
      endereço, hidrômetro, serviços cobrados); processe de novo para a planilha sair com `conta_canonica` e
      `unidade_institucional`;
@@ -133,6 +134,10 @@ O que significa cada coluna está na aba `glossario` da própria planilha. Ponto
   (ou a do mapa de contas); `id_fatura_agua` = `<FORNECEDOR>_<nº da fatura>` (SANESC, que não numera: conta + competência).
 * `valor_agua` / `valor_esgoto` / `valor_taxas` / `valor_multa_juros` são somas dos lançamentos por categoria;
   `soma_itens` deve bater com `valor_total` (regra **ITENS_NAO_FECHAM** quando não bate).
+* `valor_irpj` é o IRPJ retido, negativo como impresso (vazio = a fatura não discrimina IRPJ) e já está dentro de `valor_total` e
+  `valor_taxas`; `valor_bruto` é o total sem esse desconto (igual a `valor_total` quando não há IRPJ).
+* `observacao` do borderô: `soma por coluna difere do rodapé: …` pede conferência no PDF; `relido por OCR a N dpi para fechar com o
+  rodapé` é só informativo. PDFs digitalizados com diferença levam mais tempo, porque são relidos em resolução maior.
 * Borderô da Saneago: os valores por conta são **brutos**; `base_calculo` (água + esgoto) × `aliquota_irpj` (4,80 %) =
   `valor_retido`; `valor_final` é o que é pago. `bate_total` = a soma das contas confere com o total impresso.
 * A fatura analítica e o borderô da Saneago são o **mesmo dinheiro** (detalhe × agrupado): a validação cruza os dois
@@ -163,94 +168,65 @@ Opções úteis: `--cache DIR` (só PDFs novos são lidos de novo), `--paralelo 
 
 ---
 
-## Parte 2 — Bot do Telegram @doc_gEEstor_bot
+## Parte 2 — Site gEEstor (https://unigeestor.emc.ufg.br)
 
-O bot é a porta de entrada do banco de dados da sua organização (TJGO, UFG, Polícia Penal…). Um comando por mensagem;
-`/ajuda` lista todos e `/ajuda <comando>` mostra o guia com **exemplos reais** dos dados da sua organização.
+O site é a porta de entrada do banco de dados da sua organização (TJGO, UFG, Polícia Penal, INMETRO). Cada página tem o
+link **Preciso de ajuda** no rodapé, e a página **Tutoriais** reúne vídeos curtos de cada tarefa.
 
 ### 2.1 Entrar
 
-* `/login` → usuário → senha → (em login compartilhado) quem está entrando → botões com as suas organizações.
-* `/org` mostra/troca a organização ativa; `/senha` troca a sua senha; `/logout` sai.
-* `/status` — situação geral: faturas e borderôs de energia, faturas de água por concessionária, validação, pendências.
+* **Entrar com login** → usuário e senha → (em login compartilhado) quem está entrando → a organização.
+* **Minha conta**: trocar a senha, ver os membros do login, sair de todos os aparelhos.
+* **Painel**: situação geral — faturas e borderôs de energia, água por concessionária, alertas da conferência e pendências.
+* Sem login, a página **Enviar faturas** funciona como extrator avulso: recebe PDFs e devolve as planilhas, sem guardar nada.
 
-### 2.2 Consultar energia
+### 2.2 Consultar
 
-| Comando | O que faz |
+| Página | O que mostra |
 |---|---|
-| `/fatura <id ou número>` | resumo da fatura, itens, validação e o borderô em que ela aparece |
-| `/uc <nome, local ou número>` | dados e últimas 12 faturas de uma unidade consumidora |
-| `/mapa <uc>` · `/mapa editar <uc> <campo> <valor>` | cadastro da UC no mapa (edição só afeta as views) |
-| `/borderos [AAAA ou AAAA-MM]` · `/bordero <id>` | borderôs de energia e o cruzamento com as faturas |
-| `/validacao [REGRA]` | ocorrências da validação |
-| `/hardcodes` · `/hardcodes menu` · `/hardcode ativar\|desativar <id>` | regras de correção (só nas views) |
-| `/glossario <termo>` | significado de colunas, itens e regras |
+| **Faturas de energia** | lista com filtros (mês, UC, distribuidora); a página da fatura traz itens, medição, tributos, o PDF, os alertas da conferência e o borderô em que ela aparece |
+| **Unidades** | cada unidade consumidora: cadastro do mapa de UCs e as faturas dela |
+| **Borderôs** | borderôs de energia e o cruzamento de cada UC com a fatura individual |
+| **Água** | faturas por concessionária, contas, borderôs da Saneago (IRPJ, valor final) e o cruzamento borderô × analítica |
+| **Conferência** | erros e avisos das regras de validação (energia, água e borderôs), com o glossário de cada regra |
+| **Planilhas e PDFs** | planilhas completas (energia, borderôs, água) e os PDFs originais, um a um ou em zip |
+| **Power BI** | servidor, banco, usuário de leitura e o passo a passo para ligar o Power BI às views |
 
-### 2.3 Consultar água (novo)
+### 2.3 Conferência e justificativas
 
-| Comando | O que faz |
-|---|---|
-| `/agua` | resumo: faturas e borderôs por concessionária, competências, validação |
-| `/agua fornecedores` | as concessionárias reconhecidas, CNPJ e quantas faturas há de cada |
-| `/agua faturas <FORNECEDOR \| AAAA \| AAAA-MM>` | lista de faturas (ex.: `/agua faturas SAE_CATALAO`, `/agua faturas 2025-01`) |
-| `/agua fatura <id \| nº \| conta AAAA-MM>` | uma fatura: água/esgoto/taxas, leituras, itens, histórico, validação |
-| `/agua conta <conta \| nome>` · `/agua contas [FORNECEDOR]` | uma conta de água e as faturas dela; ou todas as contas |
-| `/agua borderos [AAAA \| AAAA-MM]` · `/agua bordero <id \| AAAA-MM>` | borderôs da Saneago: IRPJ, valor final, contas e cruzamento com a analítica |
-| `/agua validacao [REGRA]` | problemas encontrados nas faturas de água |
-| `/agua resumo [AAAA]` | totais mensais por concessionária |
+Cada alerta da conferência leva ao documento. Quem abre o PDF e vê que está tudo certo (por exemplo: o total não bate com a
+soma dos itens porque há itens só demonstrativos) clica em **Justificar** e escreve o motivo. O alerta sai do quadro, e na
+página do documento ficam registrados o alerta, a justificativa, quem justificou e quando. **Justificativas** lista todas e
+permite retirar uma (o alerta volta ao quadro). O aprovador da organização pode justificar uma regra inteira de uma vez.
 
-### 2.4 PDFs e planilhas
+### 2.4 Entrar com PDFs novos
 
-* `/pdf <id>` · `/pdf bordero <id>` · `/pdf agua <id>` — envia o PDF original; `/pdf menu` abre o navegador com filtros
-  (tipo faturas / borderôs / água, fornecedora, ano, mês, UC), seleção múltipla e download em zip.
-* `/pdfs [equatorial|chesp|borderos|agua] [AAAA ou AAAA-MM]` — contagens e listas de PDFs.
-* `/exportar <view>` — planilha Excel de uma view; `/exportar planilha` (10 abas de energia), `/exportar planilha_borderos`,
-  `/exportar planilha_agua` (11 abas: `agua_faturas`, `agua_itens`, `agua_historico`, `agua_borderos`, `agua_contas_bordero`,
-  `agua_bordero_x_analitica`, `agua_resumo_mensal`, `agua_contas`, `agua_validacao`, `agua_glossario`, `agua_fornecedores`),
-  `/exportar tudo`; `/exportar menu` escolhe as abas por botões. Filtros: `[AAAA-MM] [uc]`.
-* `/query <SQL>` — SELECT ou CREATE/ALTER/DROP VIEW sobre as views (`views_faturas`, `views_borderos`, `views_agua` —
-  **para água prefixe `views_agua.`**, porque `borderos`, `validacao`, `glossario` e `resumo_mensal` existem também na
-  energia). `/query xlsx <SQL>` força o Excel. Sem SQL? `/gem` dá o link do assistente Gemini que monta a consulta.
-* `/powerbi` — servidor, banco, usuário e senha de leitura da sua organização e o passo a passo (as views de água
-  aparecem no schema `views_agua`).
+1. **Enviar faturas**: arraste os PDFs (energia, borderôs e água juntos). O site reconhece cada um, roda os extratores
+   (PDFs digitalizados passam por OCR), confere duplicidade e se o PDF é mesmo da sua organização, e mostra o resultado
+   arquivo a arquivo, com as planilhas para baixar.
+2. **Enviar para o banco**: abre uma solicitação. A inserção só acontece depois da **aprovação** do aprovador da organização
+   (página **Solicitações**: prévia das linhas novas, Aprovar / Negar). Ao aprovar, o site grava tudo no banco da organização,
+   copia os PDFs para o repositório e recompila as views.
 
-### 2.5 Entrar com PDFs novos
+### 2.5 Outros
 
-Dois caminhos — em ambos a inserção no banco só acontece depois da **aprovação do administrador**:
-
-1. **Pelo chat**: envie os PDFs (um por mensagem, até 20 MB). O bot reconhece cada um como fatura Equatorial/CHESP,
-   borderô de energia ou **fatura de água (qualquer concessionária)**, monta o lote e responde `… adicionado ao lote
-   (ÁGUA SAE_CATALAO)`. Depois `/processar iniciar`: os extratores rodam (PDFs digitalizados passam por OCR), o bot
-   confere duplicidade (mesmo PDF, mesma fatura, mesma conta/competência) e se o PDF é mesmo da sua organização, envia
-   as planilhas (`lote_N_lote.xlsx` energia, `lote_N_agua.xlsx` água) e pergunta se quer **pedir a inserção no banco**.
-   `/processar pendentes` processa os PDFs detectados no servidor; `/processar cancelar` descarta o lote.
-2. **Pelo Google Drive**: coloque os PDFs na pasta da organização — `faturas/equatorial`, `faturas/chesp`, `borderos/`
-   e, para água, `agua/faturas`, `agua/borderos`, `agua/analiticas` — e mande `/importar` (`/importar verificar` só
-   lista). Rejeitados vão para `rejeitados/` com o motivo em `rejeicoes_log.txt`; depois da aprovação os aceitos vão
-   para `processados/AAAA-MM/`.
-
-O administrador recebe a solicitação com os botões **Aprovar / Negar / Detalhes**; ao aprovar, o bot grava tudo no banco
-da organização (tabelas de energia e de água), copia os PDFs para o repositório e recompila as views.
-
-### 2.6 Outros
-
-* `/ticket <texto>` — pedido em texto livre ao administrador (`/ticket erro <fatura> <o que está errado>` anexa os dados
-  da fatura); `/tickets` acompanha.
-* Texto livre (sem `/`) é interpretado pelo Gemini e vira um comando quando possível; senão vira um ticket.
-* `/membro` — membros de um login compartilhado; `/clear` — apaga a conversa com o bot (os dados do banco não mudam).
-* Administrador: `/usuario`, `/solicitacoes`, `/responder`, `/fechar`, `/org nova|editar`, `/recompilar`.
+* **Ajuda e pedidos**: assistente que responde dúvidas sobre o site e os dados, e pedidos (chamados) ao administrador,
+  com acompanhamento da resposta.
+* **Notificações** (sino): solicitações aprovadas ou negadas, respostas de chamados, avisos do administrador.
+* Administrador da organização: usuários e membros, mapa de UCs, regras de correção (hardcodes), correção manual de dados
+  com histórico e desfazer.
 
 ---
 
-## Parte 3 — Desktop × bot: quando usar cada um
+## Parte 3 — Desktop × site: quando usar cada um
 
-| | Aplicativo desktop | Bot @doc_gEEstor_bot |
+| | Aplicativo desktop | Site gEEstor |
 |---|---|---|
-| Onde roda | na sua máquina (Windows), sem internet | na VM (PostgreSQL), pelo Telegram |
-| Entrada | pastas de PDFs | PDFs pelo chat ou pasta do Drive; acervo carregado pelo administrador |
-| Saída | planilha Excel (+ CSV por aba na CLI) | respostas no chat, planilhas por `/exportar`, views para Power BI e `/query` |
-| Energia | faturas Equatorial/CHESP, borderôs | idem, com cruzamento borderô × fatura e mapa de UCs no banco |
-| Água | todas as concessionárias, mesma planilha; mapa de contas local | mesmas tabelas no banco (`tabelas_agua` / `views_agua`), `/agua`, cruzamento borderô × analítica |
-| Histórico/auditoria | não (cada planilha é um arquivo) | sim: snapshots de toda escrita, auditoria dos comandos, aprovação do administrador |
-| Correções | Parâmetros e Hardcodes locais | hardcodes por organização (só nas views), `/mapa editar`, tickets |
-| Extrator | o mesmo código (`faturas_app`) | o mesmo código, chamado pelo bot na VM (`--cli`) |
+| Onde roda | na sua máquina (Windows), sem internet | na VM (PostgreSQL), pelo navegador |
+| Entrada | pastas de PDFs | PDFs enviados pelo navegador; acervo carregado pelo administrador |
+| Saída | planilha Excel (+ CSV por aba na CLI) | páginas de consulta, planilhas para baixar, views para o Power BI |
+| Energia | faturas Equatorial/CHESP/ENEL, borderôs | idem, com cruzamento borderô × fatura e mapa de UCs no banco |
+| Água | todas as concessionárias, mesma planilha; mapa de contas local | mesmas tabelas no banco (`tabelas_agua` / `views_agua`), cruzamento borderô × analítica |
+| Histórico/auditoria | não (cada planilha é um arquivo) | sim: snapshots de toda escrita, auditoria, aprovação, justificativas |
+| Correções | Parâmetros e Hardcodes locais | hardcodes por organização (só nas views), mapa de UCs, chamados |
+| Extrator | o mesmo código (`faturas_app`) | o mesmo código: a branch principal deste repositório, sincronizada automaticamente |

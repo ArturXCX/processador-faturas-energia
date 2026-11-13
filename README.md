@@ -9,6 +9,17 @@ Excel estruturadas, permite editar/renomear colunas e abas, e concatenar novas
 faturas a uma planilha já existente. Distribuído como executável — o usuário
 final **não precisa de Python instalado**.
 
+> **v4.3 (12/11/2026)** — conferência geral dos quatro acervos (cada erro/aviso aberto no PDF). Energia: demanda contratada da tarifa
+> azul ("DEMANDA NA PONTA - kW" / "DEMANDA FORA DE PONTA - kW"; coluna nova `demanda_contratada_ponta_kw`), texto escondido fora da
+> página nos PDFs de 2022, nome de item quebrado em duas linhas e medição impressa sem leituras. Água: valor pela linha digitável nas
+> guias digitalizadas (Panamá, Abadiânia, Corumbá), DV "0" lido como "O" nos borderôs digitalizados da Saneago, 2ª via da SANESC,
+> devolução como crédito (Caldas Novas), virada de hidrômetro, analíticas digitalizadas. O site gEEstor passa a seguir sozinho a branch
+> principal deste repositório (ver `docs/DOCUMENTACAO_EXTRATOR.md`, seção 7).
+>
+> **v4.2 (nov/2026)** — água: borderôs da Saneago conferidos coluna a coluna, com releitura e um modelo de OCR melhor para tabelas
+> digitalizadas; colunas `valor_irpj` e `valor_bruto`; SANESC com medição em todos os modelos; importa o `DICIONARIO_AGUA.json`.
+> Energia: itens financeiros fora do lugar (retenções do layout antigo, multas na 2ª página) agora entram quando a soma não fecha.
+>
 > **v4.1 (01/10/2026)** — nova fornecedora **ENEL**: faturas antigas da ENEL/CELG D
 > (2018–2022, quase sempre digitalizadas) lidas por OCR com reconciliação dos itens
 > pelo total impresso (escolha "ENEL" na pasta). Borderôs escaneados com texto

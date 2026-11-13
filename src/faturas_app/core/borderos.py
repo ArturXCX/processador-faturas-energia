@@ -495,14 +495,14 @@ OCR_DPI = 300
 _MIN_TEXTO_PAGINA = 80
 
 
-def _ocr_palavras(page, dpi: int = OCR_DPI):
+def _ocr_palavras(page, dpi: int = OCR_DPI, lang: str = "por"):
     """Palavras da página por OCR, no MESMO formato de page.get_text('words'): (x0, y0, x1, y1, texto, bloco,
     linha, palavra), em pontos do PDF — assim os extratores posicionais servem sem mudança."""
     import pytesseract
     from PIL import Image
     pix = page.get_pixmap(dpi=dpi)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-    d = pytesseract.image_to_data(img, lang="por", config="--psm 6", output_type=pytesseract.Output.DICT)
+    d = pytesseract.image_to_data(img, lang=lang, config="--psm 6", output_type=pytesseract.Output.DICT)
     k = 72.0 / dpi
     palavras = []
     for i, txt in enumerate(d["text"]):

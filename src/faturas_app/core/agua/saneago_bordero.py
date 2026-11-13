@@ -18,6 +18,12 @@ from .texto import competencia, data_iso, inteiro, moeda, sem_acento
 _RE_CONTA = re.compile(r"^\s*(\d{3,9})(?:\s*[-—–]?\s*(\d))?(?=\s|[-—–])")
 _RE_MOEDA_TOK = re.compile(r"^-?\d{1,3}(?:\.\d{3})*,\d{1,2}$|^-?\d*,\d{1,2}$")     # ",03" = 0,03 (a Saneago omite o zero)
 _RE_INT_TOK = re.compile(r"^\d{1,3}(?:\.\d{3})*$|^\d+$")
+_RE_RUIDO_OCR = re.compile(r"^[A-Za-z|!\[\]]{1,2}$")       # 1–2 caracteres soltos que o OCR lê entre colunas ("ak", "A", "|")
+# 1–3 caracteres com símbolo/não ASCII, SEM dígito e SEM marca ordinal (º ª °): "TÁ!", "rá!", "AE)". "Nº", "N°", "1º", "2ª",
+# "(2)", "Nº5" são partes de endereço, não ruído.
+_RE_RUIDO_SIMBOLO = re.compile(r"^(?=.*[^A-Za-z0-9/.,\-ºª°])(?!.*[0-9ºª°])\S{1,3}$")
+_RE_CAB_TABELA = re.compile(r"\b(?:CONSUMO|CONTA|VALOR\w*|LOGRADOURO|CLIENTE)\b")     # palavras do cabeçalho da tabela ("VALORRS" no OCR): não são nome de órgão
+_RE_TEM_NOME = re.compile(r"[A-Za-zÀ-ÿ]{3}")                                          # "-" e sobras de OCR sem palavra não são nome
 _RE_FATURA = rx(r"N[º°o]\s*FATURA:?\s+(\d{6,})")
 _FIM_TABELA = ("FATURADO TOTAL", "INFORMACOES IMPORTANTES", "COMUNICADO", "RETENCOES", "TOTAL DA FATURA")
 
@@ -67,18 +73,48 @@ def _colunas(cab: str, ant: str) -> dict:
 _TRACOS = ("-", "—", "–", "R$", "R5", "RS")
 
 
+def _e_numero(s: str) -> bool:
+    return bool(_RE_MOEDA_TOK.match(s) or _RE_INT_TOK.match(s))
+
+
+def _e_ruido_ocr(toks: list, i: int, cauda: list) -> bool:
+    """O token `toks[i]` é ruído de OCR a ignorar na cauda? (regras no docstring de `_numeros_da_cauda`)"""
+    if not 0 < i < len(toks) - 1:
+        return False
+    t = toks[i]
+    s = t.group(0)
+    simbolo = bool(_RE_RUIDO_SIMBOLO.match(s))
+    if not (simbolo or _RE_RUIDO_OCR.match(s)):
+        return False
+    if not (any(_e_numero(c.group(0)) for c in cauda) and _e_numero(toks[i - 1].group(0))):
+        return False
+    return simbolo or not s.isalpha() or (t.start() - toks[i - 1].end() >= 2 and toks[i + 1].start() - t.end() >= 2)
+
+
 def _numeros_da_cauda(ln: str, cols: dict, ocr: bool):
     """Números do fim da linha (a "cauda" numérica depois do logradouro) → (valores, consumos, início da cauda).
 
     Cada número vai para a coluna cujo rótulo está mais perto; se essa coluna já tem valor (linha "escorregada" por um
     logradouro longo, que empurra os números para a esquerda), vai para a coluna livre mais perto. Só os últimos
-    N números da linha entram (N = colunas numéricas do cabeçalho): os demais são números do logradouro."""
+    N números da linha entram (N = colunas numéricas do cabeçalho): os demais são números do logradouro.
+    Só com OCR, um token de ruído (lixo que o OCR lê entre colunas, no lugar de um número) é ignorado, e apenas quando
+    TUDO isto vale: já há número da cauda à sua direita e há número imediatamente à esquerda. Ruído é:
+      * 1–2 LETRAS ("ak", "A") — que podem ser parte do logradouro, como o "B" de "LT 12 B": os dois vizinhos também
+        precisam estar a 2+ espaços (vão de coluna);
+      * ou um token de 1–3 caracteres com ao menos um SÍMBOLO ou caractere não ASCII ("|", "!", "[", "]", "TÁ!", "rá!",
+        "AE)"), isento do vão de 2 espaços. Tokens só de letras/dígitos/"/.,-" ("S/N", "QD.", "LT", "ABC") não entram
+        nesta classe, nem os que têm dígito ou marca ordinal (º ª °): "Nº", "N°", "1º", "2ª", "(2)", "Nº5" são partes
+        de endereço ("RUA 5 Nº 12"), e tratá-los como ruído fabricaria consumo e truncaria o logradouro.
+    Ruído no fim da linha ou sem número à esquerda encerra a cauda como qualquer outra palavra."""
     toks = list(re.finditer(r"\S+", ln))
     cauda = []
-    for t in reversed(toks):
+    for i in range(len(toks) - 1, -1, -1):
+        t = toks[i]
         s = t.group(0)
-        if _RE_MOEDA_TOK.match(s) or _RE_INT_TOK.match(s) or s in _TRACOS:
+        if _e_numero(s) or s in _TRACOS:
             cauda.append(t)
+        elif ocr and _e_ruido_ocr(toks, i, cauda):
+            continue                                             # ruído de OCR entre dois números: ignora (letra só com vão de coluna)
         else:
             break
     numericos = [t for t in reversed(cauda) if t.group(0) not in _TRACOS]
@@ -163,7 +199,13 @@ def _com_valor_vizinho(L: list[str], i: int) -> str:
     return L[i]
 
 
-def _linha_conta(ln: str):
+# Só no OCR: o dígito verificador 0 lido como a letra O, isolada entre a conta e o nome ("1329041 O FORUM DE PORANGATU").
+# Sem isto o último dígito da conta virava o DV (132904-1) e o "O" entrava no nome: a conta deixava de casar com a
+# analítica e com o mapa. Nos PDFs de texto nenhum nome de cliente começa por "O " solto.
+_RE_DV_LETRA_O = re.compile(r"\s+[Oo](?=\s+\S)")
+
+
+def _linha_conta(ln: str, ocr: bool = False):
     m = _RE_CONTA.match(ln)
     if not m:
         return None
@@ -171,8 +213,70 @@ def _linha_conta(ln: str):
     if dv is None:
         if len(conta) < 5:
             return None
+        mo = _RE_DV_LETRA_O.match(ln, m.end()) if ocr else None
+        if mo:
+            return conta, "0", mo.end()
         conta, dv = conta[:-1], conta[-1]
     return conta, dv, m.end()
+
+
+# ── conferência da soma por coluna contra o rodapé (T3b/T4) ───────────────────
+_TOL_VALOR = 0.05
+_COLUNAS_VALOR = ("valor_agua", "valor_esgoto", "valor_smrsu")
+
+
+def _br(v: float, casas: int = 2) -> str:
+    return f"{v:,.{casas}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _divergencias(borderos: list[dict], contas: list[dict], consumo_rodape: dict | None = None) -> list[tuple]:
+    """(id, coluna, soma das contas, valor do rodapé) de cada coluna que não fecha. Só confere o que o rodapé trouxe."""
+    por_id: dict[str, list[dict]] = {}
+    for c in contas:
+        por_id.setdefault(c.get("id_bordero_agua"), []).append(c)
+    saida = []
+    for b in borderos:
+        bid = b.get("id_bordero_agua")
+        cs = por_id.get(bid, [])
+        for col in _COLUNAS_VALOR:
+            rodape = b.get(col)
+            if rodape is None:
+                continue
+            soma = round(sum(c.get(col) or 0 for c in cs), 2)
+            if round(abs(soma - rodape), 2) > _TOL_VALOR:
+                saida.append((bid, col, soma, rodape))
+        # consumo: o fechamento do borderô preenche `consumo_total_m3` com a soma das contas quando o rodapé não traz o
+        # consumo; `consumo_rodape` (id → valor LIDO, None se não lido) evita que esse preenchimento passe por leitura.
+        rodape = b.get("consumo_total_m3") if consumo_rodape is None else consumo_rodape.get(bid)
+        if rodape is not None:
+            soma = sum(c.get("consumo_m3") or 0 for c in cs)
+            if soma != rodape:
+                saida.append((bid, "consumo_m3", soma, rodape))
+    return saida
+
+
+def _texto_divergencia(coluna: str, soma, rodape) -> str:
+    casas = 2 if coluna in _COLUNAS_VALOR else 0
+    return f"{coluna}: contas {_br(soma, casas)} x rodapé {_br(rodape, casas)}"
+
+
+def colunas_divergentes(borderos: list[dict], contas: list[dict], consumo_rodape: dict | None = None) -> dict[str, list[str]]:
+    """Compara, por borderô, a soma de cada coluna das contas com o total impresso no rodapé → {id_bordero_agua: [textos]}.
+
+    Valores (água, esgoto, SMRSU): tolerância de R$ 0,05. Consumo: igualdade exata. Só se confere o que o rodapé trouxe
+    (valor None = não lido = não conferido). `consumo_rodape` (id → consumo LIDO no rodapé, None se não lido) vem de
+    `extrair` (`Resultado.consumo_rodape_lido`); sem ele usa-se `consumo_total_m3` do borderô como o valor lido."""
+    saida: dict[str, list[str]] = {}
+    for bid, col, soma, rodape in _divergencias(borderos, contas, consumo_rodape):
+        saida.setdefault(bid, []).append(_texto_divergencia(col, soma, rodape))
+    return saida
+
+
+def medida_divergencia(borderos: list[dict], contas: list[dict], consumo_rodape: dict | None = None) -> tuple[int, float]:
+    """(número de colunas divergentes, soma das diferenças absolutas normalizadas pelo valor do rodapé): menor é melhor."""
+    div = _divergencias(borderos, contas, consumo_rodape)
+    norma = sum(abs(soma - rodape) / max(abs(rodape), 1.0) for _b, _c, soma, rodape in div)
+    return len(div), round(norma, 9)
 
 
 def extrair(doc, arquivo: str) -> Resultado:
@@ -200,10 +304,15 @@ def extrair(doc, arquivo: str) -> Resultado:
                 atual = faturas[num]
             if atual is None:
                 continue
-            if "MES/ANO" in up and not atual.get("competencia"):
-                atual["competencia"] = competencia(busca(r"M[ÊE]S/ANO\s*REF\.?:?\s*(\d{1,2}/\d{4})", ln))
+            if not atual.get("competencia"):
+                # texto normalizado: o OCR lê "MÉS/ANO" e "MÊS /ANO"
+                atual["competencia"] = competencia(busca(r"MES\s*/\s*ANO\s*REF\.?:?\s*(\d{1,2}/\d{4})", up))
             if "EMISSAO" in up and not atual.get("data_emissao"):
-                atual["data_emissao"] = data_iso(busca(r"EMISS[ÃA]O:?\s*(\d{2}/\d{2}/\d{4})", ln))
+                atual["data_emissao"] = data_iso(busca(r"EMISSAO:?\s*(\d{2}/\d{2}/\d{4})", up))
+                if not atual["data_emissao"] and not re.search(r"\d{2}/\d{2}/\d{4}", up[up.find("EMISSAO"):]) and i + 1 < len(L):
+                    prox = _up(L[i + 1])                        # o OCR quebrou a linha: "... EMISSÃO:" / "- DATA DE 10/11/2023"
+                    if "VENCIMENTO" not in prox:
+                        atual["data_emissao"] = data_iso(busca(r"(\d{2}/\d{2}/\d{4})", prox))
             if "VENCIMENTO" in up and not atual.get("data_vencimento"):
                 atual["data_vencimento"] = data_iso(busca(r"VENCIMENTO:?\s*(\d{2}/\d{2}/\d{4})", ln))
             if "ORGAO PAGADOR" in up and "CODIGO" in up:
@@ -211,13 +320,16 @@ def extrair(doc, arquivo: str) -> Resultado:
                 atual["cod_agrupador"] = atual.get("cod_agrupador") or busca(r"AGRUPADOR\s+(\d{3,})", ln)
             if "NOME DO ORGAO AGRUPADOR" in up:
                 for j in range(i + 1, min(i + 4, len(L))):
+                    if _RE_CAB_TABELA.search(_up(L[j])):         # OCR sem o nome: a linha seguinte é o cabeçalho da tabela
+                        continue
                     m = re.search(r"^\s*(.*?\S)\s+(\d{3,})\s+(\d{3,})\s*$", L[j])
                     if m:
-                        atual["nome_agrupador"] = atual.get("nome_agrupador") or " ".join(m.group(1).split())
+                        if _RE_TEM_NOME.search(m.group(1)):
+                            atual["nome_agrupador"] = atual.get("nome_agrupador") or " ".join(m.group(1).split())
                         atual["cod_agrupador"] = atual.get("cod_agrupador") or m.group(2)
                         atual["cod_pagador"] = atual.get("cod_pagador") or m.group(3)
                         break
-                    if L[j].strip() and not atual.get("nome_agrupador") and not re.search(r"\d{3,}", L[j]):
+                    if _RE_TEM_NOME.search(L[j]) and not atual.get("nome_agrupador") and not re.search(r"\d{3,}", L[j]):
                         atual["nome_agrupador"] = " ".join(L[j].split())
             if "CONTA" in up and "DV" in up and ("NOME" in up or "CLIENTE" in up):
                 cols = _colunas(ln, L[i - 1] if i else "")
@@ -225,7 +337,7 @@ def extrair(doc, arquivo: str) -> Resultado:
                 em_tabela = True
                 continue
             if em_tabela and not any(k in up for k in _FIM_TABELA):
-                lc = _linha_conta(ln)
+                lc = _linha_conta(ln, ocr)
                 if lc and cols:
                     conta, dv, fim_conta = lc
                     valores, consumos, ini_cauda = _numeros_da_cauda(ln, cols, ocr)
@@ -275,11 +387,23 @@ def extrair(doc, arquivo: str) -> Resultado:
             for d, ln, ini, fim, _c, _a in pendentes:
                 nome, log = _dividir_texto(ln, ini, fim, col_log)
                 d["nome_cliente"], d["logradouro"] = " ".join(nome.split()), " ".join(log.split())
+    # o OCR pode perder o nome do agrupador: os borderôs de um mesmo PDF com o mesmo código têm o mesmo nome
+    nomes = {}
+    for num in ordem:
+        if faturas[num].get("nome_agrupador") and faturas[num].get("cod_agrupador"):
+            nomes.setdefault(faturas[num]["cod_agrupador"], faturas[num]["nome_agrupador"])
+    for num in ordem:
+        b = faturas[num]
+        if not b.get("nome_agrupador") and b.get("cod_agrupador") in nomes:
+            b["nome_agrupador"] = nomes[b["cod_agrupador"]]
+    consumo_rodape: dict[str, int | None] = {}
+    res.consumo_rodape_lido = consumo_rodape
     for num in ordem:
         b = faturas[num]
         contas = [c for c in res.contas_bordero if c["id_bordero_agua"] == b["id_bordero_agua"]]
         soma = round(sum(c.get("valor_total") or 0 for c in contas), 2)
         b["soma_valores_extraidos"] = soma
+        consumo_rodape[b["id_bordero_agua"]] = b.get("consumo_total_m3")        # o que o rodapé trouxe (antes do fallback)
         if b.get("consumo_total_m3") is None and contas:
             b["consumo_total_m3"] = sum(c.get("consumo_m3") or 0 for c in contas)
         bruto = None
@@ -308,6 +432,9 @@ def extrair(doc, arquivo: str) -> Resultado:
             obs.append(f"{b['quantidade_contas_extraidas']} contas extraídas de {b['quantidade_contas']} informadas")
         if ocr:
             obs.append("PDF digitalizado: lido por OCR (conferir valores)")
+        div = colunas_divergentes([b], contas, consumo_rodape).get(b["id_bordero_agua"])
+        if div:
+            obs.append("soma por coluna difere do rodapé: " + " | ".join(div))
         b["observacao"] = "; ".join(obs)
         for c in contas:
             c["competencia"] = b.get("competencia")

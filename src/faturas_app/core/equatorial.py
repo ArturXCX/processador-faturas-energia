@@ -85,6 +85,32 @@ def extrair_texto_recortado(pdf_path):
     return '\n'.join(partes)
 
 
+def extrair_texto_visivel(pdf_path):
+    """
+    Texto só da área VISÍVEL de cada página; None quando nenhuma página tem
+    texto fora dela (aí o texto seria o mesmo de `extrair_texto`).
+
+    Em faturas de 2022 com itens que não cabem na 1ª página, o PDF traz o
+    conteúdo da página de continuação DUAS vezes: escrito fora da área da 1ª
+    página (invisível para quem abre o PDF, mas presente no texto) e de novo,
+    visível, na 2ª página. Lendo o texto inteiro, os itens da continuação
+    ("VALOR CORREÇÃO IPCA.", juros, multas…) entravam em dobro.
+    """
+    paginas, tem_fora = [], False
+    with pdfplumber.open(pdf_path) as pdf:
+        for pg in pdf.pages:
+            x0, topo, x1, base = pg.bbox
+            if any(w['top'] >= base or w['bottom'] <= topo or w['x0'] >= x1 or w['x1'] <= x0
+                   for w in pg.extract_words()):
+                tem_fora = True
+            paginas.append(unicodedata.normalize('NFC', pg.crop(pg.bbox).extract_text() or ''))
+    if not tem_fora:
+        return None
+    util = [pg for pg in paginas
+            if re.match(r'ENDERE[ÇC]O DE ENTREGA:', pg.strip(), re.IGNORECASE)]
+    return '\n'.join(util) if util else '\n'.join(paginas)
+
+
 def pf(s):
     if s is None:
         return None
@@ -281,9 +307,26 @@ def extrair_fatura(texto, pdf_path, numero_forcado=None):
     # EXCEÇÃO: UC do grupo A faturada SEM CONTRATO de demanda (itens "CONSUMO
     # S/ CONTRATO"/"DEMANDA S/ CONTRATO") — a caixa vem vazia justamente porque
     # não há demanda contratada, e o valor correto é 0.
+    # TARIFA AZUL: a caixa traz DUAS demandas contratadas, com outros rótulos
+    # ("DEMANDA NA PONTA - kW 400" / "DEMANDA FORA DE PONTA - kW 550"), e não o
+    # "DEMANDA - kW" da tarifa verde. `demanda_contratada_kw` recebe a de FORA DE
+    # PONTA (a que corresponde à demanda única da verde) e a de ponta vai para
+    # `demanda_contratada_ponta_kw` (coluna que só existe em fatura azul).
+    # MERCADO LIVRE: "DEMANDA LIVRE - kW 700". Só entram quando o rótulo
+    # convencional não existe: fatura que já tinha demanda não muda.
     m_dem = re.search(r'DEMANDA\s*-\s*kW\s+(\d+(?:[.,]\d+)?)', texto, re.IGNORECASE)
+    m_dem_fp = m_dem_p = None
+    if not m_dem:
+        m_dem_fp = re.search(r'DEMANDA\s+FORA\s+(?:DE\s+|DA\s+)?PONTA\s*-\s*kW\s+(\d+(?:[.,]\d+)?)', texto, re.IGNORECASE)
+        m_dem_p = re.search(r'DEMANDA\s+(?:NA\s+|DE\s+)?PONTA\s*-\s*kW\s+(\d+(?:[.,]\d+)?)', texto, re.IGNORECASE)
+    demanda_ponta = None
     if m_dem:
         demanda_cont = pf(m_dem.group(1))
+    elif m_dem_fp or m_dem_p:
+        demanda_cont = pf((m_dem_fp or m_dem_p).group(1))
+        demanda_ponta = pf(m_dem_p.group(1)) if m_dem_p else None
+    elif re.search(r'DEMANDA\s+LIVRE\s*-\s*kW\s+(\d+(?:[.,]\d+)?)', texto, re.IGNORECASE):
+        demanda_cont = pf(re.search(r'DEMANDA\s+LIVRE\s*-\s*kW\s+(\d+(?:[.,]\d+)?)', texto, re.IGNORECASE).group(1))
     elif re.search(r'\b(?:DEMANDA|CONSUMO)\s+S/\s*CONTRATO\b', texto, re.IGNORECASE):
         demanda_cont = 0.0
     else:
@@ -308,7 +351,7 @@ def extrair_fatura(texto, pdf_path, numero_forcado=None):
         # segurança a partir só dessa linha).
         numero_dias_leit = int(m_cab.group(4))
         data_prox_leit = fmt_br(m_cab.group(5))
-    return {
+    fatura = {
         'id_fatura':                     id_fatura,
         'numero_fatura':                 numero_fatura,
         'arquivo_pdf':                   os.path.basename(pdf_path),
@@ -343,6 +386,11 @@ def extrair_fatura(texto, pdf_path, numero_forcado=None):
         'data_proxima_leitura':          data_prox_leit,
         'mensagens_importantes':         extrair_mensagens(texto),
     }
+    if demanda_ponta is not None:
+        # só em fatura da tarifa azul: nas demais a chave nem existe, e o
+        # resultado delas fica idêntico ao de antes desta coluna existir
+        fatura['demanda_contratada_ponta_kw'] = demanda_ponta
+    return fatura
 
 
 # Caixa "MENSAGENS IMPORTANTES" (2025+) / "INFORMAÇÕES PARA O CLIENTE" (2023) /
@@ -628,6 +676,7 @@ def _financeiro_de_linha(resto, id_fatura):
     mf = _ANT_FIN.search(resto)
     if mf and not _ANT_FIN_EXCL.match(mf.group(1)):
         nome = mf.group(1).strip().rstrip('-').strip().upper()
+        nome = re.sub(r'^FATOR DE POT[ÊE]NCIA\s+[ÚU]NICO\s+', '', nome) or nome
         val = pf(mf.group(2))
         if nome and val is not None:
             return {'id_fatura': id_fatura, 'item': nome,
@@ -638,6 +687,76 @@ def _financeiro_de_linha(resto, id_fatura):
                     'base_calc_icms_r$': None, 'aliquota_icms_r$': None,
                     'icms': None, 'tarifa_unitaria_r$': None}
     return None
+
+
+# Itens financeiros que a leitura por seção não alcança: as retenções federais do layout antigo ("IR (1,2%)LEI 9430(-) -186,70", na
+# mesma linha da medição) e os itens que continuam na 2ª página, ao lado dos impostos ("MULTA - 08/2024. 1.076,75 ICMS 36395,36 19% …").
+_FIN_FORA = re.compile(
+    r'(?:(?<=\s)|^)'
+    r'((?:IR|CSLL|COFINS|PIS/PASEP)\s*(?:\([^)\n]*\))?\s*LEI 9430\(-\)'
+    r'|MULTA\s*-\s*\d{1,2}/\d{4}\.?'
+    r'|JUROS MORAT[ÓO]RIA\.?'
+    r'|VALOR CORRE[ÇC][ÃA]O IPCA\.?'
+    r'|ICMS ENERGIA INJET RET\s+\d{1,2}/\d{2,4}'
+    r'|COMPENSA[ÇC][ÃA]O DE DIC(?: MENSAL)?'
+    r'|PAGAMENTO A MAIOR\.?'
+    r'|BENEF[ÍI]CIO TARIF[ÁA]RIO (?:BRUTO|L[ÍI]QUIDO) SCEE)'
+    r'\s*(-?\d[\d.]*,\d{2})(?![\d%])', re.IGNORECASE)
+
+
+_FIN_NOME_QUEBRADO = re.compile(
+    r'^([A-ZÀ-Þ][^\n\d]*?)\s*-[^\S\n]+(\d[\d.]*,\d{2})[^\S\n]+\d{1,3}[^\S\n]+(?:LIDA|M[ÉE]DIA|M[ÍI]NIMO|ESTIMADA|LEITURA)\b[^\n]*\n'
+    r'(\d{2}/\d{4})\.?[^\S\n]+(-?\d[\d.]*,\d{2})[^\S\n]*$', re.IGNORECASE | re.MULTILINE)
+
+
+def _nome_fin_fora(nome):
+    nome = ' '.join(nome.split()).upper()
+    m = re.match(r'(IR|CSLL|COFINS|PIS/PASEP)\b.*LEI 9430', nome)
+    return f'{m.group(1)} LEI 9430(-)' if m else nome
+
+
+def _completar_itens(itens, texto, total, id_fatura):
+    """Só quando a soma dos itens não fecha com o total impresso: acrescenta as linhas de `_FIN_FORA` ainda não capturadas, se
+    isso aproximar a soma do total. Fatura que já fecha nunca muda."""
+    if total is None:
+        return itens
+    falta = round(total - sum(it.get('valor_r$') or 0 for it in itens), 2)
+    if abs(falta) <= 0.02:
+        return itens
+    novos, vistos = [], set()
+    for m in _FIN_FORA.finditer(texto):
+        nome, val = _nome_fin_fora(m.group(1)), pf(m.group(2))
+        if val is None or (nome, val) in vistos:
+            continue
+        vistos.add((nome, val))
+        if any(it.get('valor_r$') == val and str(it.get('item') or '').endswith(nome) for it in itens):
+            continue
+        novos.append({'id_fatura': id_fatura, 'item': nome, 'tipo': 'ITENS FINANCEIROS', 'unidade': None, 'quantidade': None,
+                      'preco_unitario_com_tributos_r$': None, 'valor_r$': val, 'pis_cofins': None, 'base_calc_icms_r$': None,
+                      'aliquota_icms_r$': None, 'icms': None, 'tarifa_unitaria_r$': None})
+    if novos and abs(falta - sum(n['valor_r$'] for n in novos)) < abs(falta):
+        itens = itens + novos
+        falta = round(falta - sum(n['valor_r$'] for n in novos), 2)
+    # Nome do item quebrado em duas linhas, com a 1ª na linha do histórico de consumo:
+    #     "JUROS DEV. FAT. A MAIOR - CRÉDITO DE CONSUMO - 4563,00 29 LIDA"
+    #     "06/2026 -2,34"
+    # O 4563,00 é o consumo do histórico (não o valor do item); o valor (-2,34) vem na linha de baixo, depois do mês/ano que
+    # completa o nome. Só troca quando isso faz a soma fechar com o total.
+    for m in _FIN_NOME_QUEBRADO.finditer(texto):
+        nome = m.group(1).strip().rstrip('-').strip().upper()
+        consumo_hist, val = pf(m.group(2)), pf(m.group(4))
+        if consumo_hist is None or val is None:
+            continue
+        for it in itens:
+            if str(it.get('item') or '') == nome and it.get('valor_r$') == consumo_hist and abs(falta + consumo_hist - val) <= 0.02:
+                certo = dict(it)
+                certo['item'], certo['valor_r$'] = f"{nome} - {m.group(3)}", val
+                return [certo if x is it else x for x in itens]
+    # "CRÉDITO DE … / CONSUMO - 09/2022 102,08 29 MÉDIA": fim do nome do item anterior na linha do histórico; o número não é valor de item
+    for it in itens:
+        if re.fullmatch(r'CONSUMO\s*-\s*\d{2}/\d{4}', str(it.get('item') or '')) and abs(falta + (it.get('valor_r$') or 0)) <= 0.02:
+            return [x for x in itens if x is not it]
+    return itens
 
 
 def _extrair_itens_layout_antigo(texto, id_fatura):
@@ -744,8 +863,9 @@ def extrair_itens_fatura(texto, id_fatura, id_uc=None):
                               'aliquota_icms_r$': f"{m_isento.group(8)}%",
                               'icms': None, 'tarifa_unitaria_r$': pf(m_isento.group(9))})
                 continue
+            # "INJEÇÃO SCEE FP - TE - GD II 1 kWh …": o dígito solto depois do nome é marca de nota de rodapé
             m2 = re.match(
-                r'^((?:DEMANDA|INJEÇÃO SCEE)[^\d]*?)\s+(kWh|kW|kVar)\s+'
+                r'^((?:DEMANDA|INJEÇÃO SCEE)[^\d]*?)(?:\s+\d)?\s+(kWh|kW|kVar)\s+'
                 r'([\d.,]+)\s+([\d.,]+)\s+(-?[\d.,]+)\s+(-?[\d.,]+)\s+([\d.,]+)(?:\s+.*)?$',
                 linha, re.IGNORECASE)
             if m2:
@@ -814,7 +934,8 @@ def extrair_itens_fatura(texto, id_fatura, id_uc=None):
             mem = re.match(
                 r'^(EMIS\.\s*SEGUNDA VIA|RELIGA[ÇC][ÃA]O PROGRAMADA|DESLIGAMENTO PROGRAMADO)'
                 r'\s+([\d.,]+)\s+([\d.,]+)\s+(-?[\d.,]+)',
-                linha, re.IGNORECASE)
+                linha, re.IGNORECASE) or re.match(      # qualquer serviço: "TAXA VISTORIA UNID. CONSUMIDORA 1,00 27,020000 27,02"
+                r'^([A-Za-zÀ-ÿ][^\d]*?)\s+(\d[\d.]*,\d{2})\s+(\d[\d.]*,\d{6})\s+(-?\d[\d.]*,\d{2})\b', linha)
             if mem:
                 val_gen = pf(mem.group(4))
                 if val_gen is None:
@@ -1253,6 +1374,19 @@ def extrair_medicao(texto, id_fatura, pdf_path=None):
                         'Const Medidor': None, 'Consumo kWh': None,
                         'Medidor': medidor})
 
+    # Fatura que ficaria SEM NENHUMA linha de medição: a única linha da tabela não traz leitura alguma, só a constante e o
+    # consumo ("1709562-0 ENERGIA ATIVA - KWH ÚNICO 0,180000 174": faturamento sem leitura). Só entra quando nada mais casou,
+    # para não acrescentar linhas a faturas que já têm medição.
+    if not medicao:
+        pat_g = re.compile(rf'^(\d+-?\d*){SEP}{GRANDEZA}{H}+{POSTO}{H}+{CONST}{H}+(\d[\d.]*(?:,\d+)?){H}*$', re.IGNORECASE | re.MULTILINE)
+        for m in pat_g.finditer(texto):
+            gr, po, medidor = m.group(2).upper(), m.group(3).upper(), m.group(1)
+            if any(l['Grandezas'] == gr and l['Postos horarios'] == po and l['Medidor'] == medidor for l in medicao):
+                continue
+            medicao.append({'id_fatura': id_fatura, 'Grandezas': gr, 'Postos horarios': po,
+                            'Leitura Anterior': None, 'Leitura Atual': None,
+                            'Const Medidor': pf(m.group(4)), 'Consumo kWh': pf(m.group(5)), 'Medidor': medidor})
+
     # Linha truncada: só o PDF (coordenadas) diz em qual coluna a leitura está.
     if pdf_path and ambiguas:
         _resolver_coluna_leitura(pdf_path, ambiguas)
@@ -1349,7 +1483,7 @@ def _montar_resultado(txt, pdf_path, numero_forcado=None, usou_ocr=False):
     resultado = {
         'fatura':               fat,
         'unidade_consumidora':  cli,
-        'itens_fatura': extrair_itens_fatura(txt, fid, id_uc),
+        'itens_fatura': _completar_itens(extrair_itens_fatura(txt, fid, id_uc), txt, pf(fat.get('valor_total_r$')) if isinstance(fat.get('valor_total_r$'), str) else fat.get('valor_total_r$'), fid),
         'impostos':     extrair_impostos(txt, fid),
         'medicao':      medicao,
     }
@@ -1360,10 +1494,40 @@ def _montar_resultado(txt, pdf_path, numero_forcado=None, usou_ocr=False):
     return resultado
 
 
+def _soma_nao_fecha(resultado, tolerancia=1.0):
+    """A soma dos itens (sem os demonstrativos, que não compõem o total) difere do total impresso em mais que `tolerancia`?
+    1,00 é a tolerância da conferência (regra ITENS_NAO_FECHAM)."""
+    total = (resultado.get('fatura') or {}).get('valor_total_r$')
+    if not isinstance(total, (int, float)):
+        return False
+    soma = sum(it.get('valor_r$') or 0 for it in resultado.get('itens_fatura') or []
+               if not re.search('DEMO', str(it.get('item') or ''), re.IGNORECASE))
+    return abs(soma - total) > tolerancia
+
+
+def _montar_com_reforco(txt, pdf_path, usou_ocr):
+    """`_montar_resultado` e, SÓ quando a soma dos itens não fecha com o total, uma segunda leitura com o texto da área visível
+    das páginas (ver `extrair_texto_visivel`), aceita apenas se com ela a soma fechar. Fatura que já fecha nunca muda."""
+    resultado = _montar_resultado(txt, pdf_path, usou_ocr=usou_ocr)
+    if usou_ocr or not _soma_nao_fecha(resultado):
+        return resultado
+    try:
+        visivel = extrair_texto_visivel(pdf_path)
+    except Exception:  # noqa: BLE001 — a releitura é só um reforço
+        visivel = None
+    if visivel and visivel != txt:
+        alternativa = _montar_resultado(visivel, pdf_path, usou_ocr=usou_ocr)
+        if (not _soma_nao_fecha(alternativa, 0.02)
+                and alternativa['fatura'].get('id_fatura') == resultado['fatura'].get('id_fatura')
+                and alternativa['fatura'].get('valor_total_r$') == resultado['fatura'].get('valor_total_r$')):
+            return alternativa
+    return resultado
+
+
 def processar_pdf(pdf_path):
     """Processa um único PDF da Equatorial e devolve as linhas de cada aba."""
     txt, usou_ocr = extrair_texto_info(pdf_path)
-    return _montar_resultado(txt, pdf_path, usou_ocr=usou_ocr)
+    return _montar_com_reforco(txt, pdf_path, usou_ocr)
 
 
 # Número de fatura (13 dígitos iniciando pelo ano) fora de códigos maiores.
@@ -1385,10 +1549,10 @@ def processar_pdf_multi(pdf_path):
     txt, usou_ocr = extrair_texto_info(pdf_path)
     numeros = set(_RE_NUM_13.findall(txt))
     if len(numeros) <= 1:
-        return [_montar_resultado(txt, pdf_path, usou_ocr=usou_ocr)]
+        return [_montar_com_reforco(txt, pdf_path, usou_ocr)]
     inicios = [m.start() for m in _RE_INICIO_DANF3E.finditer(txt)]
     if len(inicios) <= 1:
-        return [_montar_resultado(txt, pdf_path, usou_ocr=usou_ocr)]
+        return [_montar_com_reforco(txt, pdf_path, usou_ocr)]
 
     cortes = inicios + [len(txt)]
     segmentos: list[tuple[str, str]] = []          # (numero_fatura, texto)

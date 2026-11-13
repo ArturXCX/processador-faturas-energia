@@ -84,7 +84,7 @@ COLUNAS_TEMPLATE = [c for i, c, _t, _d in TEMPLATE if i != ITEM_CHAVE]
 # Nunca aceitos como coluna extra, por mais que apareçam no arquivo: demanda
 # contratada é sempre a da fatura (ver docstring do módulo).
 _CAMPOS_BLOQUEADOS = {
-    "demanda_contratada_kw", "demanda_geracao_contratada_kw",
+    "demanda_contratada_kw", "demanda_geracao_contratada_kw", "demanda_contratada_ponta_kw",
     "demandacontratadakw", "demandageracaokw",
     "demandacontratada", "demandageracao",
 }

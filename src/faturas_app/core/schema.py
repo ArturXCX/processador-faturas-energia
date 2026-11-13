@@ -68,6 +68,8 @@ CANONICAL_COLUMNS = {
         "tensao_min_v",
         "tensao_max_v",
         "demanda_contratada_kw",
+        # só existe em lote com fatura da tarifa AZUL (demanda contratada na ponta); nos demais a coluna não é criada
+        "demanda_contratada_ponta_kw",
         "demanda_geracao_contratada_kw",
         "perdas_transformacao_pct",
         "scee_geracao_ciclo",
@@ -156,6 +158,8 @@ CANONICAL_COLUMNS = {
         "classificacao_tarifaria",
         "tipo_fornecimento",
         "demanda_contratada_kw",
+        # só existe em lote com fatura da tarifa AZUL (demanda contratada na ponta); nos demais a coluna não é criada
+        "demanda_contratada_ponta_kw",
         "demanda_geracao_contratada_kw",
         "scee_geracao_ciclo",
         "scee_saldo_kwh_total",

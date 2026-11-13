@@ -75,6 +75,8 @@ FATURA_COLS = [
     "valor_esgoto",
     "valor_taxas",             # SMRSU / resíduos sólidos / tarifa básica / outras taxas
     "valor_multa_juros",
+    "valor_irpj",              # IRPJ retido, com o sinal impresso (negativo); já está dentro de valor_total e valor_taxas
+    "valor_bruto",             # valor_total − valor_irpj (total sem o desconto do IRPJ); = valor_total se não há IRPJ
     "valor_total",
     "soma_itens",              # soma dos lançamentos (para a validação)
     "origem",                  # fatura | analitica
@@ -136,9 +138,12 @@ VALIDACAO_COLS = ["id", "fornecedor", "conta", "conta_canonica", "competencia", 
 # Mapa de contas (cadastro): uma linha por conta real.
 MAPA_COLS = [
     "conta_canonica", "identificadores", "fornecedor", "unidade_institucional", "cidade", "nome_cliente",
-    "logradouro", "hidrometro", "agua", "esgoto", "smrsu", "operante", "primeira_competencia", "ultima_competencia",
+    "logradouro", "hidrometro", "agua", "esgoto", "smrsu", "operante", "irpj_aplicacao", "primeira_competencia", "ultima_competencia",
     "faturas", "origem",
 ]
+
+# Colunas criadas depois da primeira versão: planilha-base antiga sem elas continua aceita (a concatenação as cria vazias).
+COLUNAS_OPCIONAIS = {ABA_FATURAS: {"valor_irpj", "valor_bruto"}}
 
 CANONICAL_COLUMNS = {
     ABA_FATURAS: FATURA_COLS,
@@ -160,7 +165,7 @@ DEDUP_FULL_ROW = {ABA_ITENS, ABA_HISTORICO, ABA_CONTAS_BORDERO, ABA_VALIDACAO}
 
 COLUNAS_NUMERICAS = {
     ABA_FATURAS: ["leitura_anterior", "leitura_atual", "consumo_m3", "consumo_faturado_m3", "dias", "valor_agua",
-                  "valor_esgoto", "valor_taxas", "valor_multa_juros", "valor_total", "soma_itens"],
+                  "valor_esgoto", "valor_taxas", "valor_multa_juros", "valor_irpj", "valor_bruto", "valor_total", "soma_itens"],
     ABA_ITENS: ["ordem", "valor"],
     ABA_HISTORICO: ["consumo_m3", "valor"],
     ABA_BORDEROS: ["quantidade_contas", "quantidade_contas_extraidas", "consumo_total_m3", "valor_agua", "valor_esgoto",

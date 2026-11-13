@@ -5,6 +5,7 @@ sintéticas modeladas nos documentos reais do acervo (borderô Saneago 2024, fat
 
 Rodar:  PYTHONPATH=src python -m pytest tests/test_agua.py -q
 """
+import json
 import os
 import sys
 
@@ -13,7 +14,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from faturas_app.core import atualizacao  # noqa: E402
-from faturas_app.core.agua import (base, controller_agua, derivados_agua, gsan, identificar, saneago_bordero,  # noqa: E402
+from faturas_app.core.agua import (base, controller_agua, derivados_agua, gsan, identificar, mapa_conta, saneago_bordero,  # noqa: E402
                                    schema_agua as S, texto)
 
 
@@ -100,6 +101,62 @@ def test_identificar_por_cnpj_e_tipo():
     assert identificar.tipo("SANEAGO Nº FATURA: 3000483958 NOME DO ÓRGÃO AGRUPADOR: CONTA - DV", "SANEAGO") == identificar.TIPO_BORDERO
     assert identificar.tipo("SANEAMENTO DE GOIÁS FATURA ANALÍTICA DE ÓRGÃO PÚBLICO", "SANEAGO") == identificar.TIPO_ANALITICA
     assert identificar.tipo("DEMAE Matrícula: 21628-3", "DEMAE_CALDAS_NOVAS") == identificar.TIPO_FATURA
+
+
+def test_fatura_de_energia_de_cidade_com_saae_nao_e_agua():
+    # faturas Equatorial de out/2026 de fóruns em Caldas Novas/Abadiânia/Leopoldo de Bulhões entravam como água: a cidade do
+    # endereço casava com DEMAE/SAAE e "ÁGUA" com ITAGUAI / "CONSUMO FATURADO(KWH)"
+    energia = [
+        "AVENIDA C, Q. 28, L. 24, S/N\nESTÂNCIA ITAGUAI II\nCEP: 75680001 CALDAS NOVAS GO BRASIL\nTIPOS DE\nFATURAMENTO\n"
+        "CONSUMO FATURADO(kWh)\nMÊS/ANO\nDOCUMENTO AUXILIAR DA NOTA FISCAL DE ENERGIA ELÉTRICA ELETRÔNICA",
+        "CEP: 72940000 ABADIÂNIA GO BRASIL\nPERDAS DE TRANSFORMAÇÃO / RAMAL: 0%\nCONSUMO FATURADO(kWh)",
+        "SALA - CONSTRUÇÃO DO FÓRUM\nCEP: 75190000 LEOPOLDO DE BULHÕES GO BRASIL\nCONSUMO FATURADO(KWH)",
+    ]
+    for t in energia:
+        assert identificar.eh_documento_de_energia(t)
+        assert not identificar.eh_documento_de_agua(t, "2026090742146.pdf", "")
+    assert not identificar.eh_documento_de_agua("ESTÂNCIA ITAGUAI II CALDAS NOVAS", "x.pdf", "")      # ÁGUA só como palavra inteira
+    assert identificar.eh_documento_de_agua("DEMAE CALDAS NOVAS Matrícula: 21628-3 Consumo faturado 12 m³ Água e esgoto", "x.pdf", "")
+    assert identificar.eh_documento_de_agua("CNPJ : 01.616.929/0001-02 SANEAMENTO DE GOIÁS CONTA - DV", "x.pdf", "")
+
+
+def test_mapa_importa_dicionario_agua(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    mapa_conta.recarregar()
+    dic = tmp_path / "DICIONARIO_AGUA.json"
+    dic.write_text(json.dumps([
+        {"id_CONTA": 1, "CONTA_DV": "9945-7", "CONTA-DV": "9945-7", "CONTA": 99457, "HIDRÔMETRO_ATUAL": "A24DM0470855", "UNIDADE JUDICIÁRIA": "Fórum de Ipameri",
+         "ENDEREÇO": "GO-330, Ipameri-GO", "DISTRIBUIDORA": "ÁGUAS DE IPAMERI", "OPERANTES": True, "IRPJ_APLICAÇÃO": True, "AGUA": True, "ESGOTO": False, "SMRSU": True},
+        {"id_CONTA": 2, "CONTA_DV": "23382-5", "CONTA-DV": "23382-5", "CONTA": 233825, "HIDRÔMETRO_ATUAL": None, "UNIDADE JUDICIÁRIA": "PID de Panamá",
+         "ENDEREÇO": "Panamá-GO", "DISTRIBUIDORA": "DEMAE PANAMÁ", "OPERANTES": False, "IRPJ_APLICAÇÃO": False, "AGUA": True, "ESGOTO": False, "SMRSU": False},
+        {"id_CONTA": 3, "CONTA_DV": "16467384-1", "CONTA-DV": "16467384-1", "CONTA": 164673841, "HIDRÔMETRO_ATUAL": None, "UNIDADE JUDICIÁRIA": "PID de Panamá",
+         "ENDEREÇO": "Panamá-GO", "DISTRIBUIDORA": "DEMAE PANAMÁ", "OPERANTES": False, "IRPJ_APLICAÇÃO": False, "AGUA": True, "ESGOTO": False, "SMRSU": False},
+    ]), encoding="utf-8")
+    assert mapa_conta.importar(str(dic))["total_contas"] == 3
+    r = mapa_conta.buscar("9945-7", "AGUAS_IPAMERI")
+    assert (r["conta_canonica"], r["unidade_institucional"], r["hidrometro"], r["operante"], r["irpj_aplicacao"]) == ("99457", "Fórum de Ipameri", "A24DM0470855", True, True)
+    # Panamá tem duas contas no mapa, mas só uma nas faturas: a fatura sem conta legível continua sendo dela
+    res = base.Resultado()
+    legivel = base.nova_fatura("DEMAE_PANAMA", "a.pdf")
+    legivel.update(conta="233825", id_fatura_agua="A")
+    sem_conta = base.nova_fatura("DEMAE_PANAMA", "b.pdf")
+    sem_conta.update(conta=None, id_fatura_agua="B")
+    res.faturas += [legivel, sem_conta]
+    derivados_agua.aplicar_mapa(res)
+    assert sem_conta["conta_canonica"] == "233825" and sem_conta["unidade_institucional"] == "PID de Panamá"
+    mapa_conta.limpar()
+    mapa_conta.recarregar()
+
+
+def test_planilha_base_sem_colunas_de_irpj_continua_aceita():
+    import pandas as pd
+    cols = [c for c in S.FATURA_COLS if c not in ("valor_irpj", "valor_bruto")]
+    base_antiga = {S.ABA_FATURAS: pd.DataFrame([{c: None for c in cols} | {"id_fatura_agua": "X"}], columns=cols)}
+    assert controller_agua.divergencias(base_antiga) == []
+    outra = {S.ABA_FATURAS: pd.DataFrame([{"id_fatura_agua": "X"}])}
+    assert "valor_total" in controller_agua.divergencias(outra)[0] and "valor_irpj" not in controller_agua.divergencias(outra)[0]
+    comb, _ = controller_agua.concatenar(base_antiga, {})
+    assert {"valor_irpj", "valor_bruto"} <= set(comb[S.ABA_FATURAS].columns)
 
 
 # ── base ──────────────────────────────────────────────────────────────────────

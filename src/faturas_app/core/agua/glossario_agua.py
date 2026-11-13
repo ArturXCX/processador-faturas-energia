@@ -51,6 +51,8 @@ COLUNAS_DOC = [
     (S.ABA_FATURAS, "valor_esgoto", "Soma dos lançamentos de ESGOTO (coleta, afastamento, tratamento, custo mínimo de esgoto)."),
     (S.ABA_FATURAS, "valor_taxas", "Soma de taxas, tarifas fixas/básicas, resíduos sólidos (SMRSU/lixo) e retenções (IRPJ negativo)."),
     (S.ABA_FATURAS, "valor_multa_juros", "Multa, juros, mora e atualização monetária."),
+    (S.ABA_FATURAS, "valor_irpj", "IRPJ retido na fatura, com o sinal impresso (negativo). Vazio se a fatura não discrimina IRPJ. Já está incluído em valor_total e valor_taxas."),
+    (S.ABA_FATURAS, "valor_bruto", "Total sem o desconto do IRPJ: valor_total − valor_irpj (igual a valor_total quando não há IRPJ)."),
     (S.ABA_FATURAS, "valor_total", "Total a pagar impresso na fatura."),
     (S.ABA_FATURAS, "soma_itens", "Soma de todos os lançamentos lidos (deve bater com valor_total — regra ITENS_NAO_FECHAM)."),
     (S.ABA_FATURAS, "origem", "fatura (documento individual) ou analitica (bloco da fatura analítica da Saneago)."),

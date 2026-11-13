@@ -21,7 +21,7 @@ from . import derivados_agua, extrator, glossario_agua, mapa_conta
 from . import schema_agua as S
 from .base import Resultado
 
-VERSAO_EXTRATOR = "4.0.0"      # entra na chave do cache: mudou o extrator → reprocessa
+VERSAO_EXTRATOR = "4.3.0"      # entra na chave do cache: mudou o extrator → reprocessa
 _LISTAS = ("faturas", "itens", "historico", "borderos", "contas_bordero", "avisos")
 
 
@@ -303,7 +303,7 @@ def divergencias(base_dfs: dict) -> list[str]:
         df = base_dfs.get(aba)
         if df is None or df.empty:
             continue
-        faltantes = [c for c in S.CANONICAL_COLUMNS[aba] if c not in df.columns]
+        faltantes = [c for c in S.CANONICAL_COLUMNS[aba] if c not in df.columns and c not in S.COLUNAS_OPCIONAIS.get(aba, ())]
         if faltantes:
             msgs.append(f"Aba '{aba}': coluna(s) ausente(s) — {', '.join(faltantes)}.")
     return msgs

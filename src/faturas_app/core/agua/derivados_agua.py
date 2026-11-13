@@ -42,20 +42,32 @@ def _ocorrencia(id_, f: dict, regra: str, detalhe: str = "") -> dict:
             "competencia": f.get("competencia"), "gravidade": grav, "regra": regra, "detalhe": detalhe or desc}
 
 
-def _unica_conta_por_fornecedor() -> dict[str, dict]:
-    """Concessionárias em que o mapa tem UMA só conta: uma fatura sem conta legível (OCR) só pode ser dela."""
+def _unica_conta_por_fornecedor(faturas: list[dict] = ()) -> dict[str, dict]:
+    """Concessionárias com UMA só conta possível: a única do mapa ou, se o mapa tem outras (contas extintas), a única que
+    aparece nas faturas com conta legível. Uma fatura sem conta legível (OCR) só pode ser dela."""
     por: dict[str, list] = {}
     for r in mapa_conta.registros():
         if r.get("fornecedor"):
             por.setdefault(r["fornecedor"], []).append(r)
-    return {k: v[0] for k, v in por.items() if len(v) == 1}
+    lidas: dict[str, dict] = {}
+    for f in faturas:
+        r = mapa_conta.buscar(f.get("conta"), f.get("fornecedor")) if f.get("conta") else None
+        if r:
+            lidas.setdefault(f["fornecedor"], {})[r["conta_canonica"]] = r
+    saida = {}
+    for k, v in por.items():
+        if len(v) == 1:
+            saida[k] = v[0]
+        elif len(lidas.get(k, {})) == 1:
+            saida[k] = next(iter(lidas[k].values()))
+    return saida
 
 
 def aplicar_mapa(res: Resultado) -> None:
     """conta_canonica / unidade_institucional em todas as linhas com conta; fatura sem conta legível herda a conta do mapa
     quando a concessionária tem uma única conta cadastrada."""
     ativo = mapa_conta.ativo()
-    unicas = _unica_conta_por_fornecedor() if ativo else {}
+    unicas = _unica_conta_por_fornecedor(res.faturas) if ativo else {}
     for f in res.faturas + res.contas_bordero:
         forn, conta = f.get("fornecedor"), f.get("conta")
         if not conta and forn in unicas and "id_fatura_agua" in f:

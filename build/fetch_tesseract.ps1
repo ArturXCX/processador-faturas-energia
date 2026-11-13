@@ -32,6 +32,14 @@ if (-not (Test-Path $por)) {
     "https://github.com/tesseract-ocr/tessdata/raw/main/por.traineddata"
 }
 
+# 2b) modelo rapido do portugues: nas tabelas digitalizadas da Saneago le bem mais numeros que o padrao
+$porFast = Join-Path $stage "por_fast.traineddata"
+if (-not (Test-Path $porFast)) {
+  Write-Host "Baixando por_fast.traineddata..."
+  & curl.exe -L --fail --silent --show-error -o $porFast `
+    "https://github.com/tesseract-ocr/tessdata_fast/raw/main/por.traineddata"
+}
+
 # 3) cria env conda-forge com tesseract + libcurl (dependencia de runtime)
 $prefix = Join-Path $stage "tess_env"
 $env:MAMBA_ROOT_PREFIX = Join-Path $stage "mmroot"
@@ -52,6 +60,7 @@ foreach ($f in @("eng.traineddata", "osd.traineddata")) {
   if (Test-Path $p) { Copy-Item $p (Join-Path $portable "tessdata") -Force }
 }
 Copy-Item $por (Join-Path $portable "tessdata") -Force
+Copy-Item $porFast (Join-Path $portable "tessdata") -Force
 
 # 5) valida
 Push-Location $portable

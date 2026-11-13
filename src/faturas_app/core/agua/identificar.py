@@ -98,10 +98,23 @@ def tipo(texto: str, forn: str | None, nome_arquivo: str = "") -> str:
     return TIPO_FATURA
 
 
+# fatura/borderô de ENERGIA (cobra kWh; DANF3E). O endereço da unidade pode citar uma cidade que tem SAAE/DEMAE (Caldas Novas,
+# Abadiânia, Leopoldo de Bulhões…) e "ÁGUA" aparece dentro de outras palavras (ITAGUAI, ARAGUAIA) — isso não faz dele conta de água
+_RE_ENERGIA = re.compile(r"\bKWH\b|NOTA FISCAL/FATURA DE ENERGIA|DOCUMENTO AUXILIAR DA NOTA FISCAL DE ENERGIA|\bDANF3E\b")
+_RE_VOCAB_AGUA = re.compile(r"\b(?:AGUAS?|ESGOTOS?|HIDROMETROS?|SANEAMENTO|M3|FAES)\b|\bCONSUMO FATURADO\b(?!\s*\(?\s*KWH)")
+
+
+def eh_documento_de_energia(texto: str) -> bool:
+    return bool(_RE_ENERGIA.search(_up(texto)))
+
+
 def eh_documento_de_agua(texto: str, nome_arquivo: str = "", pasta: str = "") -> bool:
-    """Heurística rápida para o classificador do bot: há um fornecedor de água reconhecível E vocabulário de água."""
+    """Heurística rápida para o classificador do bot: há um fornecedor de água reconhecível E vocabulário de água
+    (palavras inteiras), e o documento não é de energia."""
+    up = _up(texto)
+    if eh_documento_de_energia(up):
+        return False
     f = fornecedor(texto, nome_arquivo, pasta)
     if not f:
         return False
-    up = _up(texto)
-    return any(k in up for k in ("AGUA", "ESGOTO", "HIDROMETRO", "SANEAMENTO", "M3", "CONSUMO FATURADO", "FAES"))
+    return bool(_RE_VOCAB_AGUA.search(up))
