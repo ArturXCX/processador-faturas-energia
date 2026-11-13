@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from itertools import permutations
 
 from . import schema_agua as S
 import os
@@ -82,10 +83,12 @@ class Resultado:
     borderos: list[dict] = field(default_factory=list)
     contas_bordero: list[dict] = field(default_factory=list)
     avisos: list[str] = field(default_factory=list)
+    consumo_rodape_lido: dict = field(default_factory=dict)       # borderô Saneago → consumo LIDO no rodapé (None = não lido)
 
     def estender(self, outro: "Resultado"):
         for k in ("faturas", "itens", "historico", "borderos", "contas_bordero", "avisos"):
             getattr(self, k).extend(getattr(outro, k))
+        self.consumo_rodape_lido.update(outro.consumo_rodape_lido)
 
 
 def nova_fatura(fornecedor: str, arquivo: str, ocr: bool = False, origem: str = "fatura") -> dict:
@@ -136,6 +139,116 @@ def vencimento_do_nome(caminho: str) -> str | None:
     return data_iso(f"{m.group(1)}/{m.group(2)}/{ano}") if ano else None
 
 
+def dia_mes_vencimento_do_nome(caminho: str) -> tuple[str, str] | None:
+    """(dia, mês) do vencimento que o acervo pôs no nome do arquivo ('… VENC. 23.06.pdf' → ('23', '06')), com ou sem ano."""
+    m = re.search(r"V(?:ENC[A-Z]*|CTO)\.?\s*(\d{2})[.\-/](\d{2})(?![\d])", os.path.basename(caminho or ""), re.IGNORECASE)
+    return (m.group(1), m.group(2)) if m else None
+
+
+def vencimento_plausivel(venc: str | None, comp: str | None) -> str | None:
+    """Vencimento tirado do NOME do arquivo que cai antes do mês de referência só acontece com o ano truncado no nome
+    ("… OUTUBRO.2023 - VENC. 23.11.20.pdf" → 2020-11-23): mantém dia e mês e usa o ano da competência (o seguinte, se o
+    mês do vencimento for menor que o dela). Vencimento no mês da competência ou depois volta como veio."""
+    if not venc or not comp or not re.fullmatch(r"\d{4}-\d{2}", str(comp)) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(venc)):
+        return venc
+    if venc[:7] >= comp:
+        return venc
+    ano = int(comp[:4]) + (1 if venc[5:7] < comp[5:7] else 0)
+    return f"{ano:04d}{venc[4:]}"
+
+
+def vencimento_pelo_documento(texto: str, caminho: str) -> str | None:
+    """Vencimento lido no documento que confere com o dia e o mês do nome do arquivo: serve quando o nome não traz o ano e a
+    pasta também não ('sem_/FATURA … VENC. 23.06.pdf' + "23/06/2021" impresso → '2021-06-23'). Só datas de 2015 a 2035."""
+    dm = dia_mes_vencimento_do_nome(caminho)
+    if not dm:
+        return None
+    for m in re.finditer(r"(?<!\d)(\d{2})\s?/\s?(\d{2})\s?/\s?(20\d{2})(?!\d)", texto or ""):
+        if (m.group(1), m.group(2)) == dm and 2015 <= int(m.group(3)) <= 2035:
+            return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+    return None
+
+
+# ── linha digitável de arrecadação (contas de concessionárias: "8" + segmento + tipo de valor + DV geral + valor …) ─────
+# um bloco: 11 dígitos e, se impresso junto, o dígito verificador ("82650000001-1", "81450325000.7", "82620000004 8")
+_RE_BLOCO_ARRECADACAO = re.compile(r"(?<![\dOo.,/-])([\dOo]{11})(?:\s?[-. ]\s?([\dOo])(?![\dOo,]))?(?![\dOo])")
+
+
+def _dv_mod10(digitos_: str) -> int:
+    soma = 0
+    for i, c in enumerate(reversed(digitos_)):
+        p = int(c) * (2 if i % 2 == 0 else 1)
+        soma += p // 10 + p % 10
+    return (10 - soma % 10) % 10
+
+
+def _blocos_arrecadacao(texto: str) -> list[tuple[int, int, str, str | None]]:
+    """(linha, coluna, 11 dígitos, DV impresso ou None) de cada bloco de 11 dígitos do texto; O/o lidos pelo OCR viram 0."""
+    saida = []
+    for i, ln in enumerate((texto or "").replace("\f", "\n").split("\n")):
+        for m in _RE_BLOCO_ARRECADACAO.finditer(ln):
+            b = re.sub(r"[Oo]", "0", m.group(1))
+            d = re.sub(r"[Oo]", "0", m.group(2)) if m.group(2) else None
+            saida.append((i, m.start(), b, d))
+    return saida
+
+
+def linha_digitavel(texto: str) -> dict | None:
+    """Linha digitável de arrecadação lida no texto → {"valor", "conferida", "blocos"} ou None.
+
+    O valor ocupa os dígitos 5 a 15 do código de 44 dígitos (os 7 últimos do 1º bloco + os 4 primeiros do 2º).
+    `conferida` só é True quando os QUATRO blocos foram achados (na linha do 1º ou até 3 linhas de distância: o OCR de
+    página torta espalha a linha), cada DV impresso confere com o seu bloco e o DV geral (4º dígito, módulo 10 sobre os
+    outros 43) confere: um dígito trocado pelo OCR, ou um bloco fora de ordem, reprova. Sem os quatro blocos, devolve o
+    valor do 1º bloco + o bloco seguinte da mesma linha com `conferida=False`: é só mais uma leitura, a confirmar por
+    outra fonte. Tipos de valor 8 e 9 (módulo 11) não são tratados."""
+    blocos = _blocos_arrecadacao(texto)
+    incompleta = None
+    for k, (i, _col, b1, d1) in enumerate(blocos):
+        if not re.match(r"8[1-9][67]", b1):
+            continue
+        outros = [b for j, b in enumerate(blocos) if j != k and abs(b[0] - i) <= 3 and b[2] != b1]
+        if len(outros) == 3 and (d1 is None or _dv_mod10(b1) == int(d1)) \
+                and all(b[3] is None or _dv_mod10(b[2]) == int(b[3]) for b in outros):
+            def geral(ordem) -> bool:
+                return _dv_mod10(b1[:3] + b1[4:] + "".join(b[2] for b in ordem)) == int(b1[3])
+            mesma_linha = all(b[0] == i for b in outros)
+            # na mesma linha vale a ordem do texto; espalhados em linhas vizinhas, a ordem das colunas (é uma linha só no papel)
+            ordem = outros if mesma_linha else sorted(outros, key=lambda b: b[1])
+            if not geral(ordem) and not mesma_linha:
+                validas = [list(p) for p in permutations(outros) if geral(p)]
+                ordem = validas[0] if len(validas) == 1 else ordem
+            if geral(ordem):
+                return {"valor": int(b1[4:] + ordem[0][2][:4]) / 100.0, "conferida": True, "blocos": [b1] + [b[2] for b in ordem]}
+        seg = [b for b in blocos[k + 1:] if b[0] == i]
+        if seg and incompleta is None and d1 is not None and seg[0][3] is not None \
+                and _dv_mod10(b1) == int(d1) and _dv_mod10(seg[0][2]) == int(seg[0][3]):
+            incompleta = {"valor": int(b1[4:] + seg[0][2][:4]) / 100.0, "conferida": False, "blocos": [b1, seg[0][2]]}
+    return incompleta
+
+
+def valor_linha_digitavel(texto: str, conferir: bool = True, orgao: tuple[str, ...] = ()) -> float | None:
+    """Valor do documento pela linha digitável de arrecadação ("82650000001-1 10300325000-0 12550625250-6 02308300002-8").
+
+    Devolve o valor de uma linha CONFERIDA (ver `linha_digitavel`). Com `orgao` (os 7 dígitos fixos que fecham o 2º bloco
+    na concessionária, p. ex. "0325000" no SAAE Abadiânia) aceita também a linha em que o OCR só leu bem os dois primeiros
+    blocos: 1º e 2º, cada um conferido pelo próprio DV, e o 2º terminando no código do órgão — um bloco fora de ordem não
+    passa por 2º bloco. `conferir=False` devolve ainda o de uma linha incompleta qualquer: só serve como uma leitura a
+    mais, a confirmar por outra fonte."""
+    r = linha_digitavel(texto)
+    if r and r["conferida"]:
+        return r["valor"]
+    if orgao:
+        bons = [b[2] for b in _blocos_arrecadacao(texto) if b[3] is not None and _dv_mod10(b[2]) == int(b[3])]
+        b1s = {b for b in bons if re.match(r"8[1-9][67]", b)}
+        b2s = {b for b in bons if b[4:] in orgao}
+        if len(b1s) == 1 and len(b2s) == 1:
+            return int(next(iter(b1s))[4:] + next(iter(b2s))[:4]) / 100.0
+    if r and not conferir:
+        return r["valor"]
+    return None
+
+
 def fechar_fatura(f: dict, itens: list[dict], nome_arquivo: str = "") -> None:
     """Completa a fatura: conta em dígitos, competência (do nome do arquivo se faltar), id, somas por categoria a partir
     dos itens (quando o extrator não preencheu) e soma dos itens."""
@@ -158,7 +271,14 @@ def fechar_fatura(f: dict, itens: list[dict], nome_arquivo: str = "") -> None:
     if nome_arquivo and (f.get("extraido_por_ocr") or not f.get("data_vencimento")):
         v = vencimento_do_nome(nome_arquivo)        # OCR erra dígitos de datas; o nome dado pelo acervo é confiável
         if v:
-            f["data_vencimento"] = v
+            f["data_vencimento"] = vencimento_plausivel(v, f.get("competencia"))
+        elif re.fullmatch(r"\d{4}-\d{2}", str(f.get("competencia") or "")):
+            # nome com dia e mês do vencimento mas sem ano, numa pasta sem ano ("sem_/FATURA DE ÁGUA - VENC. 27.05.pdf"): o ano
+            # é o da competência, ou o seguinte se o mês do vencimento for menor que o dela
+            dm = dia_mes_vencimento_do_nome(nome_arquivo)
+            if dm:
+                ano = int(f["competencia"][:4]) + (1 if dm[1] < f["competencia"][5:7] else 0)
+                f["data_vencimento"] = data_iso(f"{dm[0]}/{dm[1]}/{ano}") or f.get("data_vencimento")
     f["id_fatura_agua"] = montar_id(f["fornecedor"], f.get("numero_fatura"), f.get("conta"), f.get("competencia"))
     for it in itens:
         it["id_fatura_agua"] = f["id_fatura_agua"]
@@ -187,6 +307,12 @@ def fechar_fatura(f: dict, itens: list[dict], nome_arquivo: str = "") -> None:
         v = f.get(k)
         if isinstance(v, str):
             f[k] = moeda(v)
+    # IRPJ retido (valor com o sinal impresso, negativo): já está dentro de valor_total e de valor_taxas. O bruto é o total
+    # sem esse desconto. Calculado só aqui, com valor_total já definido (impresso, ou soma_itens) e convertido em número.
+    irpj = [it["valor"] for it in itens
+            if it.get("valor") is not None and re.search(r"\bIRPJ\b", it.get("descricao_normalizada") or "")]
+    f["valor_irpj"] = round(sum(irpj), 2) if irpj else None
+    f["valor_bruto"] = round(f["valor_total"] - (f["valor_irpj"] or 0), 2) if f.get("valor_total") is not None else None
     for k in ("leitura_anterior", "leitura_atual", "consumo_m3", "consumo_faturado_m3", "dias"):
         v = f.get(k)
         if v is not None and not isinstance(v, (int, float)):

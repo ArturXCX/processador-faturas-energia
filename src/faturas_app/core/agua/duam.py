@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import re
 
-from .base import RE_DATA, RE_MOEDA, Resultado, apos, busca, fechar_fatura, nova_fatura, novo_item, rx, trecho
-from .texto import competencia, inteiro, moeda
+from .base import (RE_DATA, RE_MOEDA, Resultado, apos, busca, fechar_fatura, nova_fatura, novo_item, rx, trecho,
+                   valor_linha_digitavel)
+from .texto import competencia, competencia_por_caminho, inteiro, moeda
+
+_ORGAO_CORUMBA = ("0326202",)      # dígitos fixos que fecham o 2º bloco da linha digitável do SAAE Corumbá ("57220326202")
 
 
 def _antigo(texto: str, f: dict) -> list[dict]:
@@ -102,6 +105,23 @@ def extrair(doc, arquivo: str, fornecedor: str) -> Resultado:
                 if v is not None and f.get(k) is None:
                     f[k] = v
             itens = itens or itens2
+        if not f.get("competencia") and not competencia_por_caminho(arquivo):
+            # guia antiga do SAAE Corumbá sem mês no nome do arquivo nem ano na pasta ("sem_/FATURA DE ÁGUA - VENC. 27.05.pdf"):
+            # o próprio documento imprime "MES/ANO:04/2021" (no corpo e no canhoto)
+            mm = re.search(r"M[EÊ]S\s*/\s*ANO\s*:\s*(0[1-9]|1[0-2])\s*/\s*(20[12]\d)(?!\d)", texto, re.IGNORECASE)
+            if mm:
+                f["competencia"] = f"{mm.group(2)}-{mm.group(1)}"
+        if f.get("valor_total") is None:
+            # total não lido pelos rótulos de sempre: sem isto ele viraria a soma dos itens que o OCR conseguiu ler (guia de
+            # R$ 305,60 saía com R$ 6,00, só a tarifa básica). Vale a linha digitável conferida (2º bloco com o código do SAAE
+            # Corumbá) ou "VALOR À PAGAR … R$ 305,60"; itens que não fecham com esse total são leitura parcial e não entram.
+            v = valor_linha_digitavel(texto, orgao=_ORGAO_CORUMBA)
+            if v is None:             # o OCR erra o "VALOR" do rótulo ("UQLGR À PAGAR"): basta "… À PAGAR" e o "R$" na linha de baixo
+                v = moeda(busca(r"[ÀA]\s*PAGAR[^\n]*\n[^\n]*?R\$\s*(" + RE_MOEDA + ")", texto))
+            if v is not None:
+                f["valor_total"] = v
+                if itens and abs(round(sum(it.get("valor") or 0 for it in itens), 2) - v) > 0.01:
+                    itens = []
         f["observacao"] = f.get("observacao") or "PDF digitalizado: lido por OCR"
     elif re.search(r"ID Fatura|Composi[çc][ãa]o\s+do Valor", texto):
         itens = _novo(texto, f)

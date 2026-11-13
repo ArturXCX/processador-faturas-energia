@@ -1,9 +1,9 @@
-# Como o extrator funciona — documentação técnica completa (v4.0)
+# Como o extrator funciona — documentação técnica completa (v4.3)
 
 Esta documentação explica, arquivo por arquivo, como o **Processador de Faturas de Energia e Água** transforma PDFs em
-dados estruturados, e compara o que o **aplicativo desktop** e o **bot do Telegram @doc_gEEstor_bot** fazem com esse
+dados estruturados, e compara o que o **aplicativo desktop** e o **site gEEstor** fazem com esse
 mesmo núcleo. Complementa o [README](../README.md) (visão geral e build), o [manual de uso](MANUAL_DE_USO.md)
-(passo a passo com capturas de tela) e, no projeto da VM, `DOCUMENTACAO_COMPLETA_GEESTOR.md` (bancos, bot, servidor).
+(passo a passo com capturas de tela) e, no projeto da VM, `DOCUMENTACAO_COMPLETA_GEESTOR.md` (bancos, site, servidor).
 
 Sumário
 
@@ -13,8 +13,8 @@ Sumário
 4. [Energia — borderôs (faturas agrupadas)](#4-energia--borderôs-faturas-agrupadas)
 5. [Água — todas as concessionárias no mesmo modelo](#5-água--todas-as-concessionárias-no-mesmo-modelo)
 6. [Cache, paralelismo e linha de comando](#6-cache-paralelismo-e-linha-de-comando)
-7. [O bot: o mesmo extrator dentro da VM](#7-o-bot-o-mesmo-extrator-dentro-da-vm)
-8. [Aplicativo desktop × bot — comparação de funcionalidades](#8-aplicativo-desktop--bot--comparação-de-funcionalidades)
+7. [O site gEEstor: o mesmo extrator dentro da VM](#7-o-site-geestor-o-mesmo-extrator-dentro-da-vm)
+8. [Aplicativo desktop × site — comparação de funcionalidades](#8-aplicativo-desktop--site--comparação-de-funcionalidades)
 9. [Testes, build e publicação](#9-testes-build-e-publicação)
 10. [Limitações conhecidas](#10-limitações-conhecidas)
 
@@ -28,22 +28,22 @@ e `core/agua/schema_agua.py` para água). Sobre esse núcleo há duas superfíci
 
 * o **aplicativo desktop** (`gui/`, CustomTkinter), empacotado com PyInstaller — roda na máquina do usuário e grava
   planilhas Excel;
-* a **linha de comando** (`cli.py`, `python -m faturas_app --cli …`), que é exatamente o que o **bot** chama na VM para
-  processar cada lote; o bot então grava as mesmas linhas nas tabelas do PostgreSQL.
+* a **linha de comando** (`cli.py`, `python -m faturas_app --cli …`), que é exatamente o que o **site gEEstor** chama na VM para
+  processar cada lote; o site então grava as mesmas linhas nas tabelas do PostgreSQL.
 
-Consequência prática: um PDF lido no desktop e o mesmo PDF lido pelo bot produzem **as mesmas colunas e os mesmos
+Consequência prática: um PDF lido no desktop e o mesmo PDF lido pelo site produzem **as mesmas colunas e os mesmos
 valores**; o que muda é o destino (planilha × banco) e o que se faz depois (editar colunas × consultar/aprovar/auditar).
 
 ```
 PDF ──► extrator (faturas_app.core) ──► linhas canônicas ──┬──► planilha Excel (desktop / CLI)
-                                                            └──► tabelas_* no PostgreSQL (bot, carga inicial)
+                                                            └──► tabelas_* no PostgreSQL (site, carga inicial)
 ```
 
 ## 2. Mapa dos arquivos
 
 ```
 src/faturas_app/
-├── __init__.py              __version__ (4.1.0) e APP_NAME
+├── __init__.py              __version__ (4.3.0) e APP_NAME
 ├── __main__.py              entrada: GUI, --cli, e autoverificação do exe (FATURAS_SELFCHECK)
 ├── cli.py                   modo linha de comando: energia (--pasta) e água (--agua), cache, paralelo, CSV, log
 ├── core/
@@ -117,6 +117,12 @@ docs/                        este documento, o manual de uso e as capturas de te
 Identificação: `id_fatura = <FORNECEDORA>_<número da fatura>` liga todas as abas; `numero_fatura` guarda o número
 original (na Equatorial é o nome do PDF no Drive, o que faz o `link_pdf` de busca funcionar).
 
+**Itens que a leitura por seção não alcança (v4.2).** Se a soma dos itens não fecha com o total impresso, `equatorial._completar_itens`
+procura no texto as linhas fora do lugar e as acrescenta, desde que a diferença diminua: as retenções federais do layout antigo
+("IR (1,2%)LEI 9430(-)", na mesma linha da medição) e os itens que continuam na 2ª página ao lado dos impostos (MULTA, JUROS, VALOR
+CORREÇÃO IPCA, ICMS ENERGIA INJET RET, COMPENSAÇÃO DE DIC, PAGAMENTO A MAIOR). Fatura que já fecha nunca muda. Nas 2.242 faturas da UFG de
+2023–2026, as que não fechavam caíram de 322 para 0.
+
 ### 3.1 ENEL — faturas antigas digitalizadas (v4.1, `core/enel.py`)
 
 Faturas da ENEL/CELG D de 2018 a início de 2022, anteriores ao DANF3E, quase sempre **digitalizadas** (o texto embutido,
@@ -181,6 +187,9 @@ permite ler colunas pela posição e blocos pela proximidade, com regex simples.
 
 Detalhes que fizeram diferença no acervo real:
 
+* **Borderô da Saneago com pouca tabela** — títulos grandes puxam a mediana para cima (≈ 4,0 pt contra ≈ 3,05 pt da
+  fonte da tabela); o logradouro longo estoura as colunas e empurra os números uma coluna para a direita, sem que o total
+  deixe de fechar. Só para esse documento, `Documento.repaginar()` refaz o layout com o **1º quartil** da largura.
 * **Rótulos com vários espaços** — como o layout é proporcional, "QUANTIDADE DE CONTAS AGRUPADAS" vira
   "QUANTIDADE    DE CONTAS   AGRUPADAS"; por isso todas as expressões usam `\s+` entre palavras (`base.rx`) e os
   testes de substring são feitos sobre o texto com os espaços colapsados.
@@ -194,6 +203,10 @@ Detalhes que fizeram diferença no acervo real:
 * **O nome do arquivo socorre o OCR** — o acervo nomeia os PDFs com número, mês e vencimento ("FATURA Nº 185278 - …
   - JANEIRO.2025 - VENC. 24.02.2025.pdf"); quando a página é digitalizada, `numero_do_nome`, `competencia_por_caminho`
   (mês do nome + ano da pasta) e `vencimento_do_nome` prevalecem sobre o que o OCR leu.
+* **Modelo de OCR das tabelas da Saneago (v4.2)** — em borderôs e analíticas digitalizados da Saneago, `extrator.processar_pdf` lê também
+  com o modelo rápido `por_fast.traineddata` (de tessdata_fast, 2 MB) e fica com ele se não piorar (`_nota_leitura`). No borderô de out/2023, o
+  modelo padrão de 15 MB não fechava nenhuma coluna; o rápido fecha todas. Nas faturas individuais o resultado é misto, por isso o padrão continua o
+  de 15 MB. Sem o arquivo instalado, tudo segue como antes.
 * **OCR posicional** — reutiliza `borderos._ocr_palavras` (Tesseract com caixas de palavras); o layout resultante é
   tratado pelos mesmos extratores, com tolerâncias a erros típicos (dígito verificador colado, vírgula perdida em
   valores, `O`/`0`).
@@ -223,19 +236,31 @@ ANALÍTICA DE ÓRGÃO PÚBLICO"), `bordero_agua` ("ÓRGÃO AGRUPADOR", "CONTAS A
 
 Todos passam por `base.fechar_fatura`: conta em dígitos (com o DV), competência (do nome do arquivo se faltar), datas em
 ISO, `id_fatura_agua`, somas por categoria a partir dos itens (`valor_agua`, `valor_esgoto`, `valor_taxas`,
-`valor_multa_juros`) e `soma_itens`; quando o PDF foi lido por OCR e o nome do arquivo traz `FATURA Nº n`, o número do
+`valor_multa_juros`), `soma_itens`, `valor_irpj` (soma dos itens com a palavra IRPJ, com o sinal impresso; vazio se a
+fatura não discrimina) e `valor_bruto` (`valor_total − valor_irpj`); o IRPJ continua somado em `valor_taxas`. Quando o PDF foi lido por OCR e o nome do arquivo traz `FATURA Nº n`, o número do
 arquivo prevalece sobre o do OCR.
+
+**Borderô da Saneago: conferência por coluna e releitura.** Além do `bate_total`, `saneago_bordero.colunas_divergentes`
+compara a soma das contas com o rodapé em água, esgoto, SMRSU (tolerância de R$ 0,05) e consumo (igualdade exata); o que
+não fecha vai para `observacao` (`soma por coluna difere do rodapé: …`). Se o PDF é digitalizado e alguma coluna diverge,
+`extrator.processar_pdf` relê a 400 e, se preciso, 500 dpi e fica, por borderô, com a leitura de menor divergência
+(`relido por OCR a N dpi para fechar com o rodapé`). **A releitura só traz números**: conta, nome, logradouro, ordem, ids,
+competência e datas são sempre os da leitura de 300 dpi, e só entra borderô alinhado (mesmo id, mesmo número de contas,
+contas compatíveis) que não perca rodapé lido. Com OCR, `_numeros_da_cauda` ignora ruído entre dois números (`ak`, `TÁ!`,
+`AE)`), mas não partes de endereço (`S/N`, `QD.`, `Nº`, `1º`, `(2)`). Competência que o OCR não leu vem do nome do arquivo.
 
 ### 5.5 Mapa de contas, derivados e validação
 
 * `mapa_conta.py` — JSON em `%APPDATA%\FaturasEnergia\mapa_contas_agua.json`; chave = dígitos da conta sem zeros à
-  esquerda dentro do fornecedor; `importar()` lê o `contas.json` do projeto original (CONTA_DV, CONTA, UNIDADE,
-  ENDERECO, DISTRIBUIDORA, OPERANTE, AGUA, ESGOTO, SMRSU) ou uma planilha; `construir_de_extracao()` monta o mapa a
+  esquerda dentro do fornecedor; `importar()` lê o `DICIONARIO_AGUA.json` do TJGO (CONTA_DV, CONTA,
+  UNIDADE JUDICIÁRIA, ENDEREÇO, DISTRIBUIDORA, HIDRÔMETRO_ATUAL, OPERANTES, IRPJ_APLICAÇÃO, AGUA, ESGOTO, SMRSU), o `contas.json` do
+  projeto original ou uma planilha; `construir_de_extracao()` monta o mapa a
   partir das faturas (um registro por fornecedor + conta, consolidando nome, endereço, hidrômetro, serviços e
-  competências) — foi assim que o mapa do acervo do TJGO foi gerado, já que o `contas.json` real não estava disponível.
+  competências) — foi assim que o primeiro mapa do acervo do TJGO foi gerado; desde nov/2026 o banco usa o dicionário
+  (`scripts/importar_mapa_agua.py`, com as leituras erradas de OCR já conferidas como identificadores da conta certa).
 * `derivados_agua.py` — `conta_canonica` / `unidade_institucional` em todas as linhas (uma fatura digitalizada sem
-  conta legível herda a conta do mapa quando a concessionária tem **uma única conta** cadastrada — Buriti Alegre,
-  Leopoldo de Bulhões, SANESC, Corumbá, Abadiânia, DEMAE Panamá —, com a ocorrência `CONTA_INFERIDA_PELO_MAPA`);
+  conta legível herda a conta do mapa quando a concessionária tem **uma única conta** possível (a única do mapa ou,
+  havendo contas extintas no mapa, a única lida nas faturas) — Buriti Alegre, Leopoldo de Bulhões, SANESC, Corumbá, Abadiânia, DEMAE Panamá —, com a ocorrência `CONTA_INFERIDA_PELO_MAPA`);
   regras de validação (uma linha por ocorrência): `CONTA_AUSENTE`, `COMPETENCIA_AUSENTE`, `VALOR_TOTAL_AUSENTE`,
   `ITENS_NAO_FECHAM` (soma dos itens × total, tolerância R$ 1), `FATURA_SEM_NUMERO`, `LIDA_POR_OCR`, `LEITURA_INCONSISTENTE`, `CONSUMO_DIVERGENTE`,
   `VENCIMENTO_ANTES_DA_COMPETENCIA`, `CONTA_FORA_DO_MAPA`, `DUPLICIDADE`, `BORDERO_NAO_CONFERE`, `BORDERO_ESCANEADO`,
@@ -267,54 +292,58 @@ novas). Na CLI: `--agua DIR` (repetível), `--mapa-contas ARQ`, `--sem-ocr`, com
   `cache_agua/` com a mesma ideia.
 * Saídas: `.xlsx` (+ um CSV por aba com `--csv`), `<saida>_erros.txt` com os PDFs que falharam e o log.
 
-## 7. O bot: o mesmo extrator dentro da VM
+## 7. O site gEEstor: o mesmo extrator dentro da VM
 
-O bot (`tjgo_faturas_db/bot/geestor_bot`, serviço `geestor-bot` na VM) não reimplementa nada da extração: ele chama a
-CLI do app instalado em `/home/geestor/app/src` (a mesma árvore `faturas_app` deste repositório).
+O site (`tjgo_faturas_db/web/geestor_web`, serviço `geestor-web` na VM, https://unigeestor.emc.ufg.br) não reimplementa nada da
+extração: ele chama a CLI do app instalado em `/home/geestor/app/src` (a mesma árvore `faturas_app` deste repositório). O bot do
+Telegram, que fazia o mesmo papel, foi desativado em 12/11/2026; a biblioteca dele (`geestor_bot`: classificação, carga, aprovação)
+continua em uso pelo site.
 
-1. **Classificação** (`classificar.tipo_pdf`): pelo conteúdo, cada PDF recebido (chat, Drive ou repositório) é
-   `agua` (com a concessionária — usa `faturas_app.core.agua.identificar`), `bordero`, `fatura` (EQUATORIAL/CHESP) ou
-   `outro`. A checagem de água vem antes da de borderô porque o borderô da Saneago também diz "QUANTIDADE DE CONTAS".
-2. **Lote** (`processar.py`): pasta `<lote>/{equatorial,chesp,borderos,agua}`; `rodar_extrator` executa
-   `python -m faturas_app --cli --pasta … ` para energia e `--cli --agua …` para água (cache em `saida/cache_faturas`
-   e `saida/cache_agua`).
-3. **Análise** (`carga.analisar` + `carga_agua.analisar`): lê os JSONs do cache, confere duplicidade (mesmo sha256,
-   mesmo id de fatura/borderô no banco ou no lote) e se o PDF é da organização (recusa o que já está em outro banco);
-   devolve o status de cada arquivo.
-4. **Aprovação e inserção** (`solicitacoes.py` → `carga.inserir` + `carga_agua.inserir`): como o role admin da
-   organização, numa transação: `tabelas_fatura.*` / `tabelas_bordero.*` (energia) e `tabelas_agua.*` (água: `pdf`,
-   `fatura`, `item`, `historico`, `bordero`, `conta_bordero`), cópia dos PDFs para `/home/geestor/pdfs/<org>/…`
-   (água em `agua/<fornecedor>/<AAAA>/`, `agua/saneago_borderos/`, `agua/saneago_analiticas/`) e recompilação das
-   views. Os snapshots do banco registram cada linha inserida com autor.
-5. **Consulta**: `views_agua.*` (`faturas`, `itens`, `historico`, `borderos`, `contas_bordero`, `bordero_x_analitica`,
-   `resumo_mensal`, `contas`, `validacao`, `glossario`, `fornecedores`) alimentam `/agua`, `/exportar planilha_agua`,
-   `/query` (prefixo `views_agua.`), `/pdf agua`, `/pdf menu` e o Power BI.
-6. **Carga inicial** (`scripts/vm/carga_agua.py`, disparada por `scripts/implantar_agua.py`): inventário do staging,
-   resultados extraídos (na origem ou na VM), gravação por `COPY`, mapa de contas e glossário, cópia dos PDFs.
+**Sincronia com o GitHub.** O que está em `/home/geestor/app/src` é sempre a branch principal (`master`) deste repositório: o timer
+`geestor-extrator-sync` da VM consulta o GitHub a cada 5 minutos e, quando a branch muda, baixa o commit, confere a versão nova
+rodando o próprio worker do site numa amostra fixa de PDFs (cada arquivo tem de sair com o mesmo tipo e o mesmo identificador, sem
+erro), troca a versão em uso, reinicia o site e avisa os administradores. Se a conferência falhar, ou se a versão do commit for
+menor que a de produção, nada é trocado e o aviso diz o motivo. Portanto: **mesclar na `master` é publicar no site**. O aplicativo
+de mesa continua sendo atualizado pelas Releases (seção 9). Detalhes em `tjgo_faturas_db/scripts/vm/sincronizar_extrator.py`.
 
-## 8. Aplicativo desktop × bot — comparação de funcionalidades
+1. **Classificação** (`geestor_bot.classificar.tipo_pdf`): pelo conteúdo, cada PDF enviado é `agua` (com a concessionária — usa
+   `faturas_app.core.agua.identificar`), `bordero`, `fatura` (EQUATORIAL/CHESP/ENEL) ou `outro`. A checagem de água vem antes da de
+   borderô porque o borderô da Saneago também diz "QUANTIDADE DE CONTAS".
+2. **Lote** (`geestor_web/worker.py processar`): pasta `<lote>/{equatorial,chesp,enel,borderos,agua}`; o worker chama
+   `faturas_app.cli.main` para energia e para água (cache em `saida/cache_faturas` e `saida/cache_agua`) e
+   `core.borderos.processar_pdf` para os borderôs; grava as planilhas e `resultado.json`.
+3. **Análise** (`carga.analisar` + `carga_agua.analisar`): lê os JSONs do cache, confere duplicidade (mesmo sha256, mesmo id de
+   fatura/borderô no banco ou no lote) e se o PDF é da organização (recusa o que já está em outro banco).
+4. **Aprovação e inserção** (página Solicitações → `carga.inserir` + `carga_agua.inserir`): como o papel de administração da
+   organização, numa transação: `tabelas_fatura.*` / `tabelas_bordero.*` (energia) e `tabelas_agua.*` (água), cópia dos PDFs para
+   `/home/geestor/pdfs/<org>/…` e recompilação das views. Os snapshots do banco registram cada linha inserida com autor.
+5. **Consulta**: as views `views_faturas.*`, `views_borderos.*` e `views_agua.*` alimentam as páginas do site, as planilhas
+   exportadas e o Power BI.
+6. **Conferência e justificativas**: as regras de `validacao` aparecem em Conferência; quem confere um alerta no PDF e vê que está
+   certo registra a justificativa, que tira o alerta do quadro e fica na página do documento.
 
-| Funcionalidade | Aplicativo desktop | Bot @doc_gEEstor_bot |
+## 8. Aplicativo desktop × site — comparação de funcionalidades
+
+| Funcionalidade | Aplicativo desktop | Site gEEstor |
 |---|---|---|
-| Extrair faturas Equatorial/CHESP | sim (aba Processar faturas) | sim (`/processar`, `/importar`) — mesma CLI |
+| Extrair faturas Equatorial/CHESP/ENEL | sim (aba Processar faturas) | sim (Extrator / Inserir) — mesma CLI |
 | Extrair borderôs de energia | sim (Borderôs de Energia) | sim |
 | Extrair faturas de água (12 concessionárias, borderô e analítica Saneago) | sim (aba Água) | sim — reconhecimento automático da concessionária |
 | OCR de PDFs digitalizados | sim (Tesseract embutido) | sim (Tesseract da VM) |
 | Onde os dados ficam | planilha Excel local (+ CSV) | PostgreSQL da organização (tabelas + views), com snapshots |
 | Deduplicação | por id ao adicionar a uma planilha | por sha256 e por id, no lote e contra o banco |
-| Validação | aba `validacao` / `validacao_agua` | views `validacao` / `views_agua.validacao`, `/validacao`, `/agua validacao` |
-| Mapa de UCs / mapa de contas | local (`%APPDATA%`), importar/gerar | no banco (`tabelas_mapa.uc`, `tabelas_agua.mapa_conta`), `/mapa`, carga por script |
+| Validação | aba `validacao` / `validacao_agua` | páginas Conferência (energia, água, borderôs), com justificativas |
+| Mapa de UCs / mapa de contas | local (`%APPDATA%`), importar/gerar | no banco (`tabelas_mapa.uc`, `tabelas_agua.mapa_conta`) |
 | Cruzamentos | borderô × UCs (energia); borderô × analítica (água) na validação | views `bordero_x_fatura` e `views_agua.bordero_x_analitica` |
-| Renomear/ocultar colunas | sim (perfil salvo na planilha) | não (views fixas + views criadas por `/query`) |
-| Hardcodes (correções SE→ENTÃO) | locais, aplicados na planilha | por organização, aplicados só nas views, `/hardcodes menu` |
-| Consultas ad hoc | no Excel | `/query` (SQL sobre views), `/gem` (Gemini monta a consulta), texto livre interpretado |
-| Planilhas | Salvar planilha… | `/exportar <view|planilha|planilha_agua|tudo>`, `/exportar menu` |
-| PDFs originais | ficam nas pastas do usuário | repositório na VM: `/pdf`, `/pdf agua`, `/pdf menu` (zip) |
-| Power BI | ler a planilha | conexão direta ao banco (`/powerbi`), inclusive `views_agua` |
+| Renomear/ocultar colunas | sim (perfil salvo na planilha) | não (views fixas) |
+| Hardcodes (correções SE→ENTÃO) | locais, aplicados na planilha | por organização, aplicados só nas views |
+| Planilhas | Salvar planilha… | exportação por página e planilha completa |
+| PDFs originais | ficam nas pastas do usuário | repositório na VM, com link público por documento |
+| Power BI | ler a planilha | conexão direta ao banco (página Power BI), inclusive `views_agua` |
 | Controle de acesso | não se aplica (máquina do usuário) | login por organização, papéis, aprovação do administrador, auditoria |
-| Múltiplas organizações | uma planilha por vez | TJGO, UFG, Polícia Penal — um banco cada |
-| Atualização | aviso obrigatório ao abrir (Releases do GitHub) | código implantado na VM pelo administrador |
-| Funciona sem internet | sim | não (Telegram + VM) |
+| Múltiplas organizações | uma planilha por vez | TJGO, UFG, Polícia Penal, INMETRO — um banco cada |
+| Atualização | aviso obrigatório ao abrir (Releases do GitHub) | automática: segue a branch `master` (seção 7) |
+| Funciona sem internet | sim | não |
 
 ## 9. Testes, build e publicação
 
@@ -328,12 +357,13 @@ CLI do app instalado em `/home/geestor/app/src` (a mesma árvore `faturas_app` d
 
 ## 10. Limitações conhecidas
 
-* **OCR** — em borderôs digitalizados da Saneago (2021–2023) algumas linhas saem com valor trocado; `bate_total = NÃO`
-  e a observação apontam a diferença; a analítica da mesma competência serve de conferência. DEMAE Panamá (todo
+* **OCR** — em borderôs digitalizados da Saneago (2021–2023) o OCR pode não ler um dígito nem a 500 dpi; `bate_total = NÃO`
+  e `soma por coluna difere do rodapé` na observação apontam a diferença; a analítica da mesma competência serve de conferência.
+  O dígito verificador 0 lido como a letra O (`1650402 O FÓRUM…`) continua saindo assim no PDF lido; no banco, o mapa liga essa leitura à conta certa. DEMAE Panamá (todo
   digitalizado, imóvel devolvido ao município) e Abadiânia 2021 têm extração parcial (`observacao` indica).
 * **SAAE Mineiros 2026** — as guias são imagem; a leitura por OCR cobre conta, referência, vencimento, leituras, itens
   e total, mas sem garantia de todos os itens.
-* **SANESC** não imprime número de fatura: o id é `SANESC_<cadastro>_<AAAA-MM>`.
+* **SANESC** não imprime número de fatura: o id é `SANESC_<cadastro>_<AAAA-MM>`; `data_leitura_anterior` fica vazia em todos os modelos.
 * **SAAE Abadiânia** — a competência é o mês de faturamento impresso (`MÊS FAT.`), um mês depois do consumo.
 * **CODEGO** — sem PDF no acervo; extrator experimental.
 * Categorias de valor são heurísticas por palavra (`categoria_valor`): tarifas fixas/básicas e IRPJ ficam em `taxas`,

@@ -93,7 +93,12 @@ COLUNAS_DOC = [
     ("fatura", "demanda_contratada_kw", "Demanda de potência contratada, em kW. "
                "Vazio quando a fatura não traz o campo de grandezas contratadas; "
                "0 só quando a fatura imprime esse valor explicitamente. "
-               "Ver 'Demanda contratada'."),
+               "Na tarifa azul (duas demandas contratadas) é a de FORA DE PONTA; "
+               "a de ponta fica em demanda_contratada_ponta_kw. No mercado livre é a "
+               "'DEMANDA LIVRE'. Ver 'Demanda contratada'."),
+    ("fatura", "demanda_contratada_ponta_kw", "Demanda de potência contratada NA PONTA, "
+               "em kW: só nas faturas da tarifa azul (THS_AZUL), que contratam uma "
+               "demanda para o horário de ponta e outra para fora de ponta. Vazio nas demais."),
     ("fatura", "demanda_geracao_contratada_kw", "Demanda de geração contratada, "
                "em kW (Equatorial). Vazio quando a fatura não traz o campo; "
                "0 só quando a fatura imprime esse valor explicitamente."),

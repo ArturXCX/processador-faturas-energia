@@ -94,6 +94,35 @@ def _nota_fiscal(doc, arquivo: str, fornecedor: str) -> Resultado:
     return res
 
 
+def _item_sem_virgula_ocr(L: list[str], i_cab: int, col: int, f: dict, itens: list[dict]) -> list[dict]:
+    """Só no OCR e só quando os itens não fecham com o total: um lançamento cujo valor o OCR leu sem a vírgula
+    ("FATURAMENTO ESGOTO - 298 62") fica de fora, mas a linha de detalhe logo abaixo ("> Pública … 298,62") repete o
+    valor. Se esse valor é exatamente o que falta para fechar, o lançamento entra na posição em que está impresso."""
+    total = f.get("valor_total")
+    if total is None or not itens:
+        return itens
+    falta = round(total - sum(it.get("valor") or 0 for it in itens), 2)
+    if abs(falta) <= 0.01:
+        return itens
+    bloco = []
+    for ln in L[i_cab + 1:]:
+        seg = ln[max(0, col - 3):]
+        if rx(r"TOTAL A PAGAR").search(seg):
+            break
+        if re.search(r"[A-Za-zÀ-ÿ0-9]", seg):                   # linhas só com traço/ruído não contam
+            bloco.append(seg.strip())
+    for k, s in enumerate(bloco[:-1]):
+        md = re.match(r"^((?:[A-Za-zÀ-ÿ]{2,}\s*)+)", s)
+        mv = re.search(r"(" + RE_MOEDA + r")\s*$", bloco[k + 1]) if bloco[k + 1].startswith(">") else None
+        if md and mv and not s.startswith(">") and not re.search(r"(?:" + RE_MOEDA + r")\s*$", s) and abs(moeda(mv.group(1)) - falta) <= 0.01:
+            desc = " ".join(md.group(1).split())
+            antes = sum(1 for x in bloco[:k] if not x.startswith(">") and re.search(r"[A-Za-zÀ-ÿ].*?(?:" + RE_MOEDA + r")\s*$", x))
+            novos = [(it["descricao"], it["valor"]) for it in itens]
+            novos.insert(min(antes, len(novos)), (desc, moeda(mv.group(1))))
+            return [novo_item(f, n, d, v) for n, (d, v) in enumerate(novos, 1)]
+    return itens
+
+
 def extrair(doc, arquivo: str, fornecedor: str) -> Resultado:
     texto = doc.texto.replace("\f", "\n")
     if re.search(r"Nota\s+Fiscal\s+Fatura|Leitura ant\.", texto) and not re.search(r"DESCRI[ÇC][ÃA]O\s+DOS\s+ITENS", texto):
@@ -128,6 +157,17 @@ def extrair(doc, arquivo: str, fornecedor: str) -> Resultado:
     f["consumo_faturado_m3"] = inteiro(busca(r"Consumo Faturado:\s*(\d+)", texto))
     if f["leitura_atual"] is not None and f["leitura_anterior"] is not None:
         f["consumo_m3"] = f["leitura_atual"] - f["leitura_anterior"]
+        if f["consumo_m3"] < 0:
+            # leitura atual menor que a anterior: o hidrômetro virou (9903 → 16 num medidor de 4 dígitos = 113 m³) ou foi
+            # trocado. A subtração direta dava consumo negativo; vale a virada quando ela confere com o consumo faturado
+            # impresso (ou quando não há faturado) e, nos demais casos, o próprio consumo faturado.
+            virada = 10 ** len(str(f["leitura_anterior"])) - f["leitura_anterior"] + f["leitura_atual"]
+            if f["consumo_faturado_m3"] in (None, virada):
+                f["consumo_m3"] = virada
+                f["observacao"] = f"hidrômetro virou ({f['leitura_anterior']} → {f['leitura_atual']}): consumo de {virada} m³ pela virada"
+            else:
+                f["consumo_m3"] = f["consumo_faturado_m3"]
+                f["observacao"] = f"leitura atual menor que a anterior ({f['leitura_anterior']} → {f['leitura_atual']}): consumo = faturado"
     else:
         f["consumo_m3"] = f["consumo_faturado_m3"]
     f["dias"] = inteiro(busca(r"Dias de Consumo:\s*(\d+)", texto))
@@ -139,6 +179,8 @@ def extrair(doc, arquivo: str, fornecedor: str) -> Resultado:
         if c is not None and "ITENS" in ln.upper():
             for k, (desc, val) in enumerate(itens_coluna_direita(L, i, c, r"TOTAL A PAGAR"), 1):
                 itens.append(novo_item(f, k, desc, val))
+            if doc.usou_ocr:
+                itens = _item_sem_virgula_ocr(L, i, c, f, itens)
             break
     fechar_fatura(f, itens, arquivo)
     res.faturas.append(f)

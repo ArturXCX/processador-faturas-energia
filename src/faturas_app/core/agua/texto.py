@@ -54,6 +54,18 @@ def _largura_char(palavras) -> float:
     return min(7.0, max(3.2, statistics.median(ls)))
 
 
+def _largura_char_q1(palavras) -> float:
+    """Largura de caractere pelo 1º QUARTIL das palavras com 3+ letras (mesmos limites de `_largura_char`).
+
+    Em páginas com pouca tabela e títulos grandes, a mediana acompanha a fonte dos títulos (≈4,0 pt) e não a da tabela
+    (≈3,05 pt): o logradouro longo estoura as colunas e empurra os números para a direita. O 1º quartil acompanha a
+    fonte menor, que é a da tabela."""
+    ls = sorted((t[2] - t[0]) / len(t[4]) for t in palavras if len(t[4]) >= 3 and t[2] > t[0])
+    if not ls:
+        return 5.0
+    return min(7.0, max(3.2, ls[len(ls) // 4]))
+
+
 def _desrotacionar(palavras):
     """Página com texto em pé (rotacionada 90°): a maioria das palavras é mais alta do que larga. Gira as coordenadas
     para que as linhas voltem a ser horizontais (x ← y, y ← −x)."""
@@ -70,12 +82,15 @@ def _desrotacionar(palavras):
     return saida
 
 
-def layout(palavras, ytol=Y_TOL) -> str:
-    """Texto em layout de colunas a partir das palavras posicionais de UMA página."""
+def layout(palavras, ytol=Y_TOL, cw: float | None = None) -> str:
+    """Texto em layout de colunas a partir das palavras posicionais de UMA página.
+
+    `cw` é a largura de um caractere em pontos; sem ela, usa a mediana da página (`_largura_char`)."""
     if not palavras:
         return ""
     palavras = _desrotacionar(palavras)
-    cw = _largura_char(palavras)
+    if cw is None:
+        cw = _largura_char(palavras)
     saida = []
     x_min = min(t[0] for t in palavras)
     desloc = -x_min if x_min < 0 else 0.0
@@ -89,6 +104,11 @@ def layout(palavras, ytol=Y_TOL) -> str:
             buf = buf.ljust(col) + str(t[4])
         saida.append(buf.rstrip())
     return "\n".join(saida) + "\n"
+
+
+def _texto_corrido(palavras) -> str:
+    """Texto sem colunas (uma linha impressa por linha, palavras separadas por um espaço) a partir de palavras posicionais."""
+    return "\n".join(" ".join(w[4] for w in sorted(l, key=lambda t: t[0])) for l in _linhas(palavras))
 
 
 _VOCABULARIO = ("AGUA", "ESGOTO", "FATURA", "CONSUMO", "VALOR", "VENCIMENTO", "LEITURA", "CONTA", "TOTAL", "CNPJ",
@@ -137,13 +157,14 @@ def _matriz_orientacao(page):
 class Documento:
     """PDF aberto com texto em layout por página; OCR automático nas páginas-imagem."""
 
-    def __init__(self, caminho: str, ocr: bool = True, dpi: int = 300):
+    def __init__(self, caminho: str, ocr: bool = True, dpi: int = 300, lang: str = "por"):
         import fitz
         self.caminho = caminho
         self.nome = os.path.basename(caminho)
         self.paginas: list[str] = []
         self.paginas_ocr: list[bool] = []
         self._simples: list[str] = []
+        self._palavras: list[list[tuple]] = []      # palavras de cada página, já no espaço exibido (ou as do OCR)
         with fitz.open(caminho) as doc:
             self.n_paginas = doc.page_count
             for i in range(doc.page_count):
@@ -152,11 +173,11 @@ class Documento:
                 usa_ocr = texto_ilegivel(texto)
                 if usa_ocr and ocr and _ocr_disponivel():
                     from ..borderos import _ocr_palavras
-                    palavras = _ocr_palavras(page, dpi=dpi)
+                    palavras = _ocr_palavras(page, dpi=dpi, lang=lang)
                     self.paginas_ocr.append(True)
+                    self._palavras.append(palavras)
                     self.paginas.append(layout(palavras))
-                    self._simples.append("\n".join(" ".join(w[4] for w in sorted(l, key=lambda t: t[0]))
-                                                   for l in _linhas(palavras)))
+                    self._simples.append(_texto_corrido(palavras))
                 else:
                     palavras = page.get_text("words")
                     m = _matriz_orientacao(page)
@@ -164,8 +185,32 @@ class Documento:
                         # coordenadas das palavras vêm no espaço sem rotação; leva para o espaço exibido
                         palavras = [tuple(fitz.Rect(w[:4]) * m) + tuple(w[4:]) for w in palavras]
                     self.paginas_ocr.append(False)
+                    self._palavras.append(palavras)
                     self.paginas.append(layout(palavras))
                     self._simples.append(texto)
+
+    @classmethod
+    def de_palavras(cls, paginas: list[list[tuple]], ocr: list[bool] | None = None, nome: str = "") -> "Documento":
+        """Documento montado a partir de palavras posicionais (x0, y0, x1, y1, texto), sem PDF: uma lista por página.
+        `ocr` diz, página a página, se as palavras vieram do OCR. Serve a testes e a fluxos que já têm as palavras."""
+        self = cls.__new__(cls)
+        self.caminho = nome
+        self.nome = os.path.basename(nome) if nome else ""
+        self.n_paginas = len(paginas)
+        self._palavras = [list(p) for p in paginas]
+        self.paginas = [layout(p) for p in self._palavras]
+        self.paginas_ocr = list(ocr) if ocr is not None else [False] * len(self._palavras)
+        self._simples = [_texto_corrido(p) for p in self._palavras]
+        return self
+
+    def repaginar(self, q1: bool = True) -> None:
+        """Refaz `self.paginas` a partir das palavras guardadas. Com `q1`, a largura de caractere é a do 1º quartil
+        (`_largura_char_q1`) em vez da mediana. Só o borderô Saneago usa isso (ver `extrator.processar_documento`)."""
+        novas = []
+        for palavras in self._palavras:
+            cw = _largura_char_q1(_desrotacionar(palavras)) if q1 and palavras else None
+            novas.append(layout(palavras, cw=cw))
+        self.paginas = novas
 
     @property
     def usou_ocr(self) -> bool:

@@ -142,6 +142,7 @@ _CAMPOS = {
     "endereco": "logradouro", "distribuidora": "fornecedor", "fornecedor": "fornecedor", "operante": "operante",
     "agua": "agua", "esgoto": "esgoto", "smrsu": "smrsu", "hidrometro": "hidrometro", "cidade": "cidade",
     "nome": "nome_cliente", "nome_cliente": "nome_cliente",
+    "hidrometro_atual": "hidrometro", "operantes": "operante", "irpj_aplicacao": "irpj_aplicacao",   # DICIONARIO_AGUA.json
 }
 _FORN_APELIDOS = {
     "saneago": "SANEAGO", "sae": "SAE_CATALAO", "sae catalao": "SAE_CATALAO", "demae": "DEMAE_CALDAS_NOVAS",
@@ -182,7 +183,7 @@ def _ler_bruto(caminho: str) -> list[dict]:
 
 
 def importar(caminho: str) -> dict:
-    """Importa contas.json (projeto original) ou planilha com colunas parecidas e salva como mapa."""
+    """Importa contas.json (projeto original), DICIONARIO_AGUA.json ou planilha com colunas parecidas e salva como mapa."""
     regs = []
     for bruto in _ler_bruto(caminho):
         r: dict = {}
@@ -201,7 +202,7 @@ def importar(caminho: str) -> dict:
             "unidade_institucional": r.get("unidade_institucional"), "logradouro": r.get("logradouro"),
             "cidade": r.get("cidade"), "nome_cliente": r.get("nome_cliente"), "hidrometro": r.get("hidrometro"),
             "agua": _bool(r.get("agua")), "esgoto": _bool(r.get("esgoto")), "smrsu": _bool(r.get("smrsu")),
-            "operante": _bool(r.get("operante")), "origem": os.path.basename(caminho),
+            "operante": _bool(r.get("operante")), "irpj_aplicacao": _bool(r.get("irpj_aplicacao")), "origem": os.path.basename(caminho),
         })
     return salvar(regs, origem=os.path.basename(caminho))
 

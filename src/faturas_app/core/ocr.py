@@ -82,5 +82,14 @@ def configurar_ocr() -> bool:
     return True
 
 
+def idioma_tabelas() -> str | None:
+    """Modelo LSTM rápido do português (`por_fast.traineddata`, de tessdata_fast), se instalado. Nas tabelas digitalizadas da Saneago
+    ele lê bem mais números que o modelo padrão de 15 MB; nas faturas individuais o resultado é misto, então não é o padrão."""
+    if not configurar_ocr():
+        return None
+    td = os.environ.get("TESSDATA_PREFIX")
+    return "por_fast" if td and (Path(td) / "por_fast.traineddata").is_file() else None
+
+
 def ocr_disponivel() -> bool:
     return configurar_ocr()
